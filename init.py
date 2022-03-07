@@ -89,6 +89,7 @@ ROOK_RELEVANT_BITS = [
 [P,K,Q,B,N,R,p,k,q,b,n,r] = range(12)
 NO_PIECE = 12 # utile pour l'encodage des coups
 PIECE_LETTER = "PKQBNRpkqbnr "
+PIECE_LETTER.index('P')
 PIECE_ASCII = { p : "♙", k : "♔", q : "♕", n : "♘", b : "♗", r : "♖",
                    P : "♟︎", K : "♚", Q : "♛", N : "♞", B : "♝", R : "♜"}
 

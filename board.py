@@ -164,6 +164,54 @@ class Board:
         occ2 = occ0 | occ1
         print(occ0 == self.occupancies[0], occ1 == self.occupancies[1], occ2 == self.occupancies[2])
 
+
+    def set_fen(self,fen):
+        '''Update le board en fonction d'un fenboard donné en argument'''
+
+        self.bitboard = [0 for i in range(12)]
+
+        sep_espace = fen.split(' ')
+        pieces_par_ligne = sep_espace[0].split('/')
+        vide = [str(i+1) for i in range(8)]
+        droits = sep_espace[2]
+        passant = sep_espace[3]
+        filesToCols = {"a": 0,"b": 1,"c": 2,"d": 3,
+                        "e": 4,"f": 5,"g": 6,"h": 7}
+        colsToFiles = {v : k for k,v in filesToCols.items()}
+
+        if sep_espace[1] == 'w':
+            self.side = WHITE
+        else: self.side = BLACK
+
+        print(pieces_par_ligne)
+        for ligne in range(len(pieces_par_ligne)):
+            col = 0
+            for piece in pieces_par_ligne[ligne]:
+                if piece in vide:
+                    col += int(piece)
+                else:
+                    case = ligne*8 + col
+                    elem = PIECE_LETTER.index(piece)
+                    self.bitboard[elem] = self.set_bit(self.bitboard[elem], case)
+                    col += 1
+
+        self.occupancies = [0,0,0]
+        for i in range(6):
+            self.occupancies[0] |= self.bitboard[i]
+            self.occupancies[1] |= self.bitboard[i+6]
+        self.occupancies[2] = self.occupancies[0] | self.occupancies[1]
+
+        if passant == '-':
+            self.en_passant = -1 # case pour manger en passant, si =-1 pas de case
+        else:
+            self.en_passant = int(passant)
+
+        dict = {'K':1, 'Q':2, 'k':4, 'q':8}
+        sum = 0
+        for s in reversed(droits):
+            sum += dict[s]
+        self.castle_right = sum #droits au roque
+
     # INITIALISATION DES ATTAQUES ###########################################################################
 
     def init_leaper_attack(self):
