@@ -44,7 +44,7 @@ class Board:
 
         self.en_passant = -1 # case pour manger en passant, si =-1 pas de case
 
-        self.castle_right = int("0b1111",base = 2) #droits au roque
+        self.castle_right = 0b1111 #droits au roque
         # 0001 -> le roi blanc peut roquer à l'aile roi
         # 0010 -> le roi blanc peut roquer à l'aile dame
         # 0100 -> le roi noir peut roquer à l'aile roi
@@ -575,7 +575,9 @@ class Board:
         ############################################################################################################################################
         ##### // MAKE MOVE and UNDO MOVE FUNCTIONS // ##############################################################################################
         ############################################################################################################################################
-
+    def add_to_history(self):
+        self.history.append((self.bitboard[:], self.occupancies[:], self.en_passant, self.castle_right))
+    
     def undo_move(self, real_move):
         """ annule le dernier coup, si real_move = True alors on supprime d'abord la dernière entrée de l'historique sinon non """
         if real_move:
@@ -607,18 +609,85 @@ class Board:
 
             # on déplace la pièce
             self.bitboard[piece] = self.pop_bit(self.bitboard[piece], source)
-            self.bitboard[piece] = self.set_bit(self.bitboard[piece], target)
+            
+            if promote != NO_PIECE: # si il y a une promotion
+                self.bitboard[promote] = self.set_bit(self.bitboard[promote], target)
+            else:
+                self.bitboard[piece] = self.set_bit(self.bitboard[piece], target)
+            
             self.occupancies[self.side] = self.pop_bit(self.occupancies[self.side], source)
             self.occupancies[self.side] = self.set_bit(self.occupancies[self.side], target)
             self.occupancies[2] = self.pop_bit(self.occupancies[2], source) # quel que soit le coup il n'y aura plus de piece sur la case d'origine
 
             # on gère les captures
+            if enpass: # cas particulier : prise en passant
+                if self.side == WHITE:
+                    self.occupancies[p] = self.pop_bit(self.occupancies[p], target+8)
+                    self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target+8) # on retire la piece de l'occupance global de la couleur attaquée
+                else:
+                    self.occupancies[P] = self.pop_bit(self.occupancies[p], target-8)
+                    self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target-8) # on retire la piece de l'occupance global de la couleur attaquée
+                 
             if capture:
                 self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target) # on retire la piece de l'occupance global de la couleur attaquée
-
+                
                 for i in range((1-self.side)*6,(2-self.side)*6): # on parcours les pieces de la couleur adverse
                     if self.get_bit(self.bitboard[i], target):
                         self.occupancies[i] = self.pop_bit(self.occupancies[i], target)
                         break
             else:
                 self.occupancies[2] = self.set_bit(self.occupancies[2], target) # il n'y avait pas de piece avant donc on doit l'ajouter
+
+            if double: # on défini la nouvelle case de en passant
+                self.en_passant = source + (-1 + 2*self.side)*8
+            else:
+                self.en_passant = -1
+            
+            if roque: # on doit deplacer la tour et enlever le droit au roque
+                if target == G1:
+                    self.bitboard[R] = self.set_bit(self.bitboard[R], F1)
+                    self.bitboard[R] = self.pop_bit(self.bitboard[R], H1)
+                    self.occupancies[0] = self.set_bit(self.occupancies[0], F1)
+                    self.bitboard[0] = self.pop_bit(self.occupancies[0], H1)
+                    self.occupancies[2] = self.set_bit(self.occupancies[2], F1)
+                    self.bitboard[2] = self.pop_bit(self.occupancies[2], H1)
+                    self.castle_right &= 0b1100
+                elif target == C1:
+                    self.bitboard[R] = self.set_bit(self.bitboard[R], D1)
+                    self.bitboard[R] = self.pop_bit(self.bitboard[R], A1)
+                    self.occupancies[0] = self.set_bit(self.occupancies[0], D1)
+                    self.bitboard[0] = self.pop_bit(self.occupancies[0], A1)
+                    self.occupancies[2] = self.set_bit(self.occupancies[2], D1)
+                    self.bitboard[2] = self.pop_bit(self.occupancies[2], A1)
+                    self.castle_right &= 0b1100
+                elif target == G8:
+                    self.bitboard[R] = self.set_bit(self.bitboard[R], F8)
+                    self.bitboard[R] = self.pop_bit(self.bitboard[R], H8)
+                    self.occupancies[1] = self.set_bit(self.occupancies[0], F8)
+                    self.bitboard[1] = self.pop_bit(self.occupancies[0], H8)
+                    self.occupancies[2] = self.set_bit(self.occupancies[2], F8)
+                    self.bitboard[2] = self.pop_bit(self.occupancies[2], H8)
+                    self.castle_right &= 0b0011
+                else:
+                    self.bitboard[R] = self.set_bit(self.bitboard[R], D8)
+                    self.bitboard[R] = self.pop_bit(self.bitboard[R], A8)
+                    self.occupancies[1] = self.set_bit(self.occupancies[1], D8)
+                    self.bitboard[1] = self.pop_bit(self.occupancies[1], A8)
+                    self.occupancies[2] = self.set_bit(self.occupancies[2], D8)
+                    self.bitboard[2] = self.pop_bit(self.occupancies[2], A8)
+                    self.castle_right &= 0b0011
+            # on update les droits aux roques si une tour bouge ou si elle est capturée
+            if (piece == R and source == H1) or target == H1:
+                self.castle_right &= 0b1110
+            elif (piece == R and source == A1) or target == A1:
+                self.castle_right &= 0b1101
+            elif (piece == r and source == H8) or target == H8:
+                self.castle_right &= 0b1011
+            elif (piece == r and source == A8) or target == A8:
+                self.castle_right &= 0b0111
+                
+            # on verifie que le roi n'est pas en échec
+            
+            # on finalise le coup
+            self.side ^= 1 # on change de coté
+            self.add_to_history()
