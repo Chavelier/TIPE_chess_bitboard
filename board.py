@@ -51,7 +51,7 @@ class Board:
         # 1000 -> le roi noir peut roquer à l'aile dame
 
         self.history = []
-        self.history.append((self.bitboard[:], self.occupancies[:], self.en_passant, self.castle_right))
+        self.history.append((self.bitboard[:], self.occupancies[:], self.side, self.en_passant, self.castle_right))
 
         # tables d'attaques
         self.pawn_attack = [[], []]
@@ -88,8 +88,8 @@ class Board:
 
     @staticmethod
     def get_bit(bitboard, case):
-        """ U64 , int -> U64
-        renvoi le bit de la case demandee du bitboard """
+        """ U64 , int -> bool
+        renvoi si le bit de la case demandee du bitboard est occupé"""
         return (bitboard & (1 << case) != 0)
 
     @staticmethod
@@ -129,6 +129,7 @@ class Board:
     def print_board(self,unicode=False):
         """ affiche l'échequier dans la console """
 
+        print()
         for x in range(8):
             ligne = str(8-x)+"   "
             for y in range(8):
@@ -152,8 +153,8 @@ class Board:
         else:
             print("Trait : Blancs")
         if self.en_passant != -1:
-            print("En passant : %s"%self.case_int2str(self.en_passant))
-        print("Droits au roque : %s"%bin(self.castle_right)[2:])
+            print("En passant : %s"%CASES[self.en_passant])
+        print("Droits au roque : %s \n\n"%bin(self.castle_right)[2:])
 
     def is_occupancies_correct(self):
         occ0 = 0
@@ -163,6 +164,50 @@ class Board:
             occ1 |= self.bitboard[i+6]
         occ2 = occ0 | occ1
         print(occ0 == self.occupancies[0], occ1 == self.occupancies[1], occ2 == self.occupancies[2])
+
+    
+    def set_fen(self,fen):
+        '''Update le board en fonction d'un fenboard donné en argument'''
+
+        self.bitboard = [0 for i in range(12)]
+
+        sep_espace = fen.split(' ')
+        pieces_par_ligne = sep_espace[0].split('/')
+        vide,droits,passant = [str(i+1) for i in range(8)],sep_espace[2],sep_espace[3]
+
+        self.side = (sep_espace[1] == 'b')
+        # if sep_espace[1] == 'w':
+        #     self.side = WHITE
+        # else: self.side = BLACK
+
+        for ligne in range(len(pieces_par_ligne)):
+            col = 0
+            for piece in pieces_par_ligne[ligne]:
+                if piece in vide: # ce n'est pas une piece c'est un nombre
+                    col += int(piece)
+                else:
+                    case = ligne*8 + col
+                    elem = PIECE_LETTER.index(piece)
+                    self.bitboard[elem] = self.set_bit(self.bitboard[elem], case)
+                    col += 1
+
+        self.occupancies = [0,0,0]
+        for i in range(6):
+            self.occupancies[0] |= self.bitboard[i]
+            self.occupancies[1] |= self.bitboard[i+6]
+        self.occupancies[2] = self.occupancies[0] | self.occupancies[1]
+
+        if passant == '-':
+            self.en_passant = -1 # case pour manger en passant, si =-1 pas de case
+        else:
+            self.en_passant = CASES.index(passant)
+
+        dico,somme = {'K':1, 'Q':2, 'k':4, 'q':8},0
+        for s in droits:
+            somme += dico[s]
+        self.castle_right = somme #droits au roque
+        self.add_to_history()
+        
 
     # INITIALISATION DES ATTAQUES ###########################################################################
 
@@ -432,7 +477,7 @@ class Board:
 
 
     def move_generation(self,side):
-        """ génère les coups possibles du côté donné en argument """
+        """ génère les coups pseudo légaux possibles du côté donné en argument """
 
         move_list = [] #liste des pseudo coups possibles encodé selon la forme d'au dessus
 
@@ -440,7 +485,6 @@ class Board:
         if side == WHITE:
             if self.castle_right & 1: # king castling
                 if not (self.occupancies[2] & (2**F1 + 2**G1)):
-                    print(self.occupancies[2] & (2**F1 + 2**G1))
                     if (not self.square_is_attacked(E1, BLACK)) and (not self.square_is_attacked(F1, BLACK)):
                         move_list.append(self.encode_move(E1, G1, K, NO_PIECE, 0, 0, 0, 1))
             if self.castle_right & 2: # queen castling
@@ -468,7 +512,7 @@ class Board:
                     # attaque de pion
                     is_attacking = self.pawn_attack[0][depart] & self.occupancies[1]
                     while is_attacking:
-                        arrivee = self.get_ls1b(is_attacking)
+                        arrivee = self.ls1b_index(is_attacking)
                         if arrivee <= H8: #on mange et on promotionne
                             move_list.append(self.encode_move(depart, arrivee, P, Q, 1, 0, 0, 0))
                             move_list.append(self.encode_move(depart, arrivee, P, R, 1, 0, 0, 0))
@@ -505,7 +549,7 @@ class Board:
                     # attaque de pion
                     is_attacking = self.pawn_attack[1][depart] & self.occupancies[0]
                     while is_attacking:
-                        arrivee = self.get_ls1b(is_attacking)
+                        arrivee = self.ls1b_index(is_attacking)
                         if arrivee >= A1: #on mange et on promotionne
                             move_list.append(self.encode_move(depart, arrivee, p, q, 1, 0, 0, 0))
                             move_list.append(self.encode_move(depart, arrivee, p, r, 1, 0, 0, 0))
@@ -556,8 +600,21 @@ class Board:
 
         return move_list
 
-    def print_move(self,side):
+    def legal_move_generation(self,side):
         liste = self.move_generation(side)
+        L = []
+        for move in liste:
+            if self.make_move(move):
+                L.append(move)
+                self.undo_move(True)
+        # print(L)
+        return L
+        
+    def print_move(self,side,legal=True):
+        if legal:
+            liste = self.legal_move_generation(side)
+        else:
+            liste = self.move_generation(side)
         print("\n")
         print("Coup   Piece  Capture  Double  Enpassant  Roque")
         print()
@@ -572,21 +629,23 @@ class Board:
         print("\nNombre de coup : %s"%len(liste))
 
 
-        ############################################################################################################################################
-        ##### // MAKE MOVE and UNDO MOVE FUNCTIONS // ##############################################################################################
-        ############################################################################################################################################
+    ############################################################################################################################################
+    ##### // MAKE MOVE and UNDO MOVE FUNCTIONS // ##############################################################################################
+    ############################################################################################################################################
+    
     def add_to_history(self):
-        self.history.append((self.bitboard[:], self.occupancies[:], self.en_passant, self.castle_right))
+        self.history.append((self.bitboard[:], self.occupancies[:], self.side, self.en_passant, self.castle_right))
     
     def undo_move(self, real_move):
         """ annule le dernier coup, si real_move = True alors on supprime d'abord la dernière entrée de l'historique sinon non """
         if real_move:
             del self.history[-1]
-        (bb, occ, enpass, castle) = self.history[-1]
+        (bb, occ, sd, enpass, castle) = self.history[-1]
         self.bitboard = bb[:]
         self.occupancies = occ[:]
         self.en_passant = enpass
         self.castle_right = castle
+        self.side = sd
 
     def make_move(self, move, only_capture_flag=False):
         """ fait le coup et l'ajoute à l'historique """
@@ -622,18 +681,22 @@ class Board:
             # on gère les captures
             if enpass: # cas particulier : prise en passant
                 if self.side == WHITE:
-                    self.occupancies[p] = self.pop_bit(self.occupancies[p], target+8)
+                    self.bitboard[p] = self.pop_bit(self.bitboard[p], target+8)
                     self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target+8) # on retire la piece de l'occupance global de la couleur attaquée
+                    self.occupancies[2] = self.pop_bit(self.occupancies[2], target+8)
+                    self.occupancies[2] = self.set_bit(self.occupancies[2], target)
                 else:
-                    self.occupancies[P] = self.pop_bit(self.occupancies[p], target-8)
+                    self.bitboard[P] = self.pop_bit(self.bitboard[p], target-8)
                     self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target-8) # on retire la piece de l'occupance global de la couleur attaquée
-                 
+                    self.occupancies[2] = self.pop_bit(self.occupancies[2], target-8)
+                    self.occupancies[2] = self.set_bit(self.occupancies[2], target)
+            
             if capture:
                 self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target) # on retire la piece de l'occupance global de la couleur attaquée
                 
                 for i in range((1-self.side)*6,(2-self.side)*6): # on parcours les pieces de la couleur adverse
                     if self.get_bit(self.bitboard[i], target):
-                        self.occupancies[i] = self.pop_bit(self.occupancies[i], target)
+                        self.bitboard[i] = self.pop_bit(self.bitboard[i], target)
                         break
             else:
                 self.occupancies[2] = self.set_bit(self.occupancies[2], target) # il n'y avait pas de piece avant donc on doit l'ajouter
@@ -648,34 +711,39 @@ class Board:
                     self.bitboard[R] = self.set_bit(self.bitboard[R], F1)
                     self.bitboard[R] = self.pop_bit(self.bitboard[R], H1)
                     self.occupancies[0] = self.set_bit(self.occupancies[0], F1)
-                    self.bitboard[0] = self.pop_bit(self.occupancies[0], H1)
+                    self.occupancies[0] = self.pop_bit(self.occupancies[0], H1)
                     self.occupancies[2] = self.set_bit(self.occupancies[2], F1)
-                    self.bitboard[2] = self.pop_bit(self.occupancies[2], H1)
+                    self.occupancies[2] = self.pop_bit(self.occupancies[2], H1)
                     self.castle_right &= 0b1100
                 elif target == C1:
                     self.bitboard[R] = self.set_bit(self.bitboard[R], D1)
                     self.bitboard[R] = self.pop_bit(self.bitboard[R], A1)
                     self.occupancies[0] = self.set_bit(self.occupancies[0], D1)
-                    self.bitboard[0] = self.pop_bit(self.occupancies[0], A1)
+                    self.occupancies[0] = self.pop_bit(self.occupancies[0], A1)
                     self.occupancies[2] = self.set_bit(self.occupancies[2], D1)
-                    self.bitboard[2] = self.pop_bit(self.occupancies[2], A1)
+                    self.occupancies[2] = self.pop_bit(self.occupancies[2], A1)
                     self.castle_right &= 0b1100
                 elif target == G8:
                     self.bitboard[R] = self.set_bit(self.bitboard[R], F8)
                     self.bitboard[R] = self.pop_bit(self.bitboard[R], H8)
                     self.occupancies[1] = self.set_bit(self.occupancies[0], F8)
-                    self.bitboard[1] = self.pop_bit(self.occupancies[0], H8)
+                    self.occupancies[1] = self.pop_bit(self.occupancies[0], H8)
                     self.occupancies[2] = self.set_bit(self.occupancies[2], F8)
-                    self.bitboard[2] = self.pop_bit(self.occupancies[2], H8)
+                    self.occupancies[2] = self.pop_bit(self.occupancies[2], H8)
                     self.castle_right &= 0b0011
                 else:
                     self.bitboard[R] = self.set_bit(self.bitboard[R], D8)
                     self.bitboard[R] = self.pop_bit(self.bitboard[R], A8)
                     self.occupancies[1] = self.set_bit(self.occupancies[1], D8)
-                    self.bitboard[1] = self.pop_bit(self.occupancies[1], A8)
+                    self.occupancies[1] = self.pop_bit(self.occupancies[1], A8)
                     self.occupancies[2] = self.set_bit(self.occupancies[2], D8)
-                    self.bitboard[2] = self.pop_bit(self.occupancies[2], A8)
+                    self.occupancies[2] = self.pop_bit(self.occupancies[2], A8)
                     self.castle_right &= 0b0011
+            elif piece == K:
+                self.castle_right &= 0b1100
+            elif piece == k:
+                self.castle_right &= 0b0011
+            
             # on update les droits aux roques si une tour bouge ou si elle est capturée
             if (piece == R and source == H1) or target == H1:
                 self.castle_right &= 0b1110
@@ -685,9 +753,30 @@ class Board:
                 self.castle_right &= 0b1011
             elif (piece == r and source == A8) or target == A8:
                 self.castle_right &= 0b0111
+              
+            #on vérifie si le roi n'est pas en échec
+            if self.square_is_attacked(self.ls1b_index(self.bitboard[K+6*self.side]), 1-self.side):
+                self.undo_move(False)
+                return 0 # le coup est legal
                 
-            # on verifie que le roi n'est pas en échec
-            
             # on finalise le coup
             self.side ^= 1 # on change de coté
             self.add_to_history()
+            return 1 # le coup est legal
+    
+    ############################################################################
+    #### CONNECTIONS A L'INTERFACE #############################################
+    ############################################################################
+    
+    def trad_move(string):
+        move_list = self.legal_move_generation(self.side)
+        
+        source = CASES.index(string[0:2])
+        target = CASES.index(string[2:4])
+        prom = string[4]
+        if self.side == WHITE:
+            promotion = PIECE_LETTER.index(prom.upper())
+        else:
+            promotion = PIECE_LETTER.index(prom.lower())
+        for move in move_list:
+            if source == self.get_move_source(move) and target == self.get_move_target(move) and promotion ==
