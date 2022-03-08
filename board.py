@@ -764,11 +764,14 @@ class Board:
             self.add_to_history()
             return 1 # le coup est legal
     
+    
+    
     ############################################################################
     #### CONNECTIONS A L'INTERFACE #############################################
     ############################################################################
     
-    def trad_move(string):
+    def trad_move(self,string):
+        """ traduit le coup pour pouvoir l'utiliser """
         move_list = self.legal_move_generation(self.side)
         
         source = CASES.index(string[0:2])
@@ -779,4 +782,7 @@ class Board:
         else:
             promotion = PIECE_LETTER.index(prom.lower())
         for move in move_list:
-            if source == self.get_move_source(move) and target == self.get_move_target(move) and promotion ==
+            if source == self.get_move_source(move) and target == self.get_move_target(move) and promotion == self.get_move_promotion(move):
+                return move
+        print("le coup n'est pas correct ou laisse le roi en echec")
+        return -1
