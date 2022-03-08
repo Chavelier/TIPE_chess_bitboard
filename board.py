@@ -638,7 +638,7 @@ class Board:
     
     def undo_move(self, real_move):
         """ annule le dernier coup, si real_move = True alors on supprime d'abord la dernière entrée de l'historique sinon non """
-        if real_move:
+        if real_move and len(self.history) >= 2:
             del self.history[-1]
         (bb, occ, sd, enpass, castle) = self.history[-1]
         self.bitboard = bb[:]
