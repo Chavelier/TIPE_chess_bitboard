@@ -212,6 +212,10 @@ class Board:
             sum += dict[s]
         self.castle_right = sum #droits au roque
 
+        def get_fen(self):
+            '''Récupère le fenboard encodé du board actuel'''
+            return ""
+
     # INITIALISATION DES ATTAQUES ###########################################################################
 
     def init_leaper_attack(self):

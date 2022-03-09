@@ -29,7 +29,6 @@ def loadImages():
 
 
 def main():
-    b = board.GameState()
     p.init()
     screen,clock = p.display.set_mode((WIDTH + MOVE_LOG_PANEL_WIDTH,HEIGHT)),p.time.Clock()
     screen.fill(p.Color("white"))
@@ -52,13 +51,13 @@ def main():
                         sqSelected = (row,col)
                         if sqSelected == (1,1):
                             print("JE SUIS LE FEN BOARD PARTIEL DE LA POSITION!!!!")
-                            print(gs.getFen())
+                            print(g.get_fen())
                         playerClicks.append(sqSelected) #On append de la même manière pour le premier et deuxième click
                     if len(playerClicks) == 2: #Après le 2nd click
-                        moved = board.Move(playerClicks[0],playerClicks[1],gs.board)
+                        move = g.make_move()
                             #print(engine.find_book_moves(chess.Board('rnbqkb1r/ppp1ppp1/5n2/3p3p/3P4/5NP1/PPP1PP1P/RNBQKB1R w KQkq - 0 4')))
-                        if True : #if move in validMoves:
-                            tradName = gs.tradMove(moved)
+                        if move != 0: #if move in validMoves:
+                            #tradName = gs.tradMove(moved) TODO
                             gs.makeMove(moved,tradName)
                             moveMade,animate = True,True
                             sqSelected,playerClicks = (),[] #On reste les clicks
