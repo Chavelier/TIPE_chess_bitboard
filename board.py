@@ -10,6 +10,7 @@ BOARD
 """
 
 from init import *
+import time
 
 class Board:
     """ classe qui gère tout l'échéquier """
@@ -202,12 +203,44 @@ class Board:
         else:
             self.en_passant = CASES.index(passant)
 
-        dico,somme = {'K':1, 'Q':2, 'k':4, 'q':8},0
+        dico,somme = {'K':1, 'Q':2, 'k':4, 'q':8, '-':0},0
         for s in droits:
             somme += dico[s]
         self.castle_right = somme #droits au roque
         self.add_to_history()
         
+    # def perft_complet(self,depth,nb_coup,nb_capture,nb_ep,nb_castle,nb_prom,nb_check):
+    #     """ vérifie les performances de générations des coups """        
+        
+    #     if depth == 0:
+    #         return (nb_coup+1,nb_capture,nb_ep,nb_castle,nb_prom,nb_check)
+        
+    #     move_list = self.move_generation(self.side)
+    #     for mv in move_list:
+    #         if self.make_move(mv):
+    #         # self.square_is_attacked(self.l1sb_index(self.bitboard[R+self.side*6]), 1-self.side)
+    def perft(self,depth):
+        if depth == 0:
+            return 1
+        move_list = self.move_generation(self.side)
+        somme = 0
+        for mv in move_list:
+            if self.make_move(mv): # si le coup est legal le fait
+                somme += self.perft(depth-1)
+            self.undo_move(True)
+        return somme
+    
+    @staticmethod
+    def get_ms():
+        return int(round(time.time() * 1000))
+    
+    def perft_test(self,depth):
+        tic = Board.get_ms()
+        print("\n\nProfondeur   Nombres de coups")
+        for i in range(1,depth+1):
+            print("{0}            {1}".format(i,self.perft(i)))
+        tac = Board.get_ms()
+        print("\nTemps : %s ms"%(tac-tic))
 
     # INITIALISATION DES ATTAQUES ###########################################################################
 
@@ -774,8 +807,8 @@ class Board:
         """ traduit le coup pour pouvoir l'utiliser """
         move_list = self.legal_move_generation(self.side)
         
-        source = CASES.index(string[0:2])
-        target = CASES.index(string[2:4])
+        source = CASES.index(string[0:2].lower())
+        target = CASES.index(string[2:4].lower())
         prom = string[4]
         if self.side == WHITE:
             promotion = PIECE_LETTER.index(prom.upper())
