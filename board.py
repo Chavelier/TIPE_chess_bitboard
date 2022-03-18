@@ -209,6 +209,43 @@ class Board:
         self.add_to_history()
 
 
+    def move_to_pgn(self,move,valid_moves):
+        "Prend en entrée un coup et renvoie sa traduction en PGN. Ex : Qxe5+"
+
+        if self.get_move_castling(move):
+            if self.get_move_target(move) == G1 or self.get_move_target(move) == G8:
+                return "O-O"
+            else: return "O-O-O"
+
+        txt = ''
+        piece = self.get_move_piece(move)
+        case_arrivee = self.get_move_target(move)
+        case_depart = self.get_move_source(move)
+
+        if piece == p or piece == P:
+            if self.get_move_capture(move):
+                txt += CASES[case_depart][0] + 'x'
+        else:
+            txt += PIECE_LETTER[piece].upper()
+            l,temp = valid_moves,''
+            for move_temp in l:
+                if self.get_move_target(move_temp) == case_arrivee and (move_temp != move):
+                    if self.get_move_piece(move_temp) == piece:
+                        case_depart_temp = self.get_move_source(move_temp)
+                        if case_depart_temp//8 == case_depart//8:
+                            temp += CASES[case_depart][1]
+                        else:
+                            temp += CASES[case_depart][0]
+            if self.get_move_capture(move):
+                temp = 'x' + temp
+            txt += temp
+
+        txt2 = ''
+        if self.square_is_attacked(self.ls1b_index(self.bitboard[K+self.side*6]),1-self.side):
+            txt2 += '+'
+
+        return txt + CASES[case_arrivee] + txt2
+
     # INITIALISATION DES ATTAQUES ###########################################################################
 
     def init_leaper_attack(self):
@@ -458,7 +495,7 @@ class Board:
         return (move & 0xfc0) >> 6
     @staticmethod
     def get_move_piece(move):
-        return (move & 0xf000) >> 12        
+        return (move & 0xf000) >> 12
     @staticmethod
     def get_move_promotion(move):
         return (move & 0xf0000) >> 16

@@ -1,25 +1,45 @@
 import pygame as py
 import board
 import time
+import sys
+import math
 from init import *
+from pygamebutton import Button
 
-vertSapin,bleuPSV,brown,whiteBrown = (30, 79, 27),(17,141,129),(184,140,100),(248,220,180)
-colors = [whiteBrown,brown]
+vert_sapin,bleuPSV,brown,white_brown,white_blue,blue = (30, 79, 27),(17,141,129),(184,140,100),(248,220,180),(233,233,227),(64,112,162)
+colors = [white_blue,blue]
 
 py.init()
-icone = py.image.load("images/chessico.png")
+icone = py.image.load("assets/chessico.png")
 py.display.set_icon(icone)
 py.display.set_caption("Chess Engine")
+clock = py.time.Clock()
 WIDTH,HEIGHT,DIMENSION = 512,512,8 #Dimension de l'échiquier
 SQ_SIZE = HEIGHT // DIMENSION #Taille des cases
+BAR_WIDTH,BAR_WIDTH = 0,0
 MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT,MAX_FPS,IMAGES = int(HEIGHT/3),HEIGHT,120,{} #GERE LE TICK POUR LES ANIMS ETC, SI ON A BESOIN DE RAM ON LE PASSE A TRES PEU
+FINAL_WIDTH = WIDTH + MOVE_LOG_PANEL_WIDTH
 colsToFiles = {0:"a", 1:"b", 2:"c", 3:"d", 4:"e", 5:"f", 6:"g", 7:"h"}
 filesToCols = {v : k for k,v in colsToFiles.items()}
+current_evaluation = 3.5
 
-#Initialise un dictionnaire global pour les images (une seule fois avec pygame sinon trop lourd)
+screen = py.display.set_mode((FINAL_WIDTH,HEIGHT))
+BACKGROUND = py.transform.scale(py.image.load("assets/background.jpg"), (FINAL_WIDTH, HEIGHT))
+
+
 def loadImages():
+    """ Initialise un dictionnaire global pour les images (une seule fois avec pygame sinon trop lourd)"""
+
     for piece in PIECE_LETTER[:-1]:
-        IMAGES[piece] = py.image.load("images/" + PIECE_LETTER_IMAGES[PIECE_LETTER.index(piece)] + ".png")
+        IMAGES[piece] = py.image.load("assets/" + PIECE_LETTER_IMAGES[PIECE_LETTER.index(piece)] + ".png")
+
+def activation_function(x):
+    """Prend en entrée la valeur de l'évaluation actuelle de la position et renvoie la longueur
+    de la partie noire de la barre"""
+
+    phi = (1+math.sqrt(5))/2
+    alpha = math.sqrt(5)*phi
+    return (2/(1+math.exp(-x/(alpha))))-1
 
 def liste_to_move(l):
     """Prend en entrée une liste représentant les deux couples case arrivée/case départ
@@ -29,14 +49,15 @@ def liste_to_move(l):
         s += CASES[8*row+col]
     return s
 
-def main():
+def run(eval_bar_flag):
+    """Tourne en boucle et actualise en fonction le board en fonction des entrées de l'utilisateur"""
+
     B = board.Board()
     py.init()
-    screen,clock = py.display.set_mode((WIDTH + MOVE_LOG_PANEL_WIDTH,HEIGHT)),py.time.Clock()
-    screen.fill(py.Color("white"))
-    valid_moves,move_made,animate,running,game_over = B.move_generation(WHITE),False,False,True,False  #TODO Servira pour jouer uniquement des coups valides!#Flag utilisé lorsqu'un move est joué (est utile pour éviter les bugs),#flag pour savoir si on doit animer,#A voir quand il y aura les mats !! #TODO ce n'est pas pour tout de suite
+    screen.fill(py.Color("black"))
+    valid_moves,move_made,animate,running,game_over = B.legal_move_generation(WHITE),False,False,True,False  #TODO Servira pour jouer uniquement des coups valides!#Flag utilisé lorsqu'un move est joué (est utile pour éviter les bugs),#flag pour savoir si on doit animer,#A voir quand il y aura les mats !! #TODO ce n'est pas pour tout de suite
     loadImages() #On fait ça une seule fois avant la boucle while
-    sq_selected,player_clicks = (),[] #Pas de case sélectionnée initialement, tuple(row,col) #Garder la trace des cliques de l'utilisateur (deux tuples(row,col))
+    sq_selected,player_clicks,pgn_history = (),[],[] #Pas de case sélectionnée initialement, tuple(row,col) #Garder la trace des cliques de l'utilisateur (deux tuples(row,col))
     moveLogFont,coordFont = py.font.SysFont("Montserrat",20,False,False),py.font.SysFont("Montserrat",18,False,False)
     while running:
         for e in py.event.get():
@@ -67,50 +88,55 @@ def main():
                             if val_move == 1:
                                 move_made,animate = True,True
                                 sq_selected,player_clicks = (),[] #On reste les clicks
+                                pgn_history.append(B.move_to_pgn(mv,valid_moves))
                         else:
-                            player_clicks = [sq_selected] #Petit tips : quand le deuxième clic d'une première pièce n'est pas sur une case
-                            #autorisée par un coup légal, la case du deuxième du clic devient la case de départ !!
+                            player_clicks = [sq_selected] #Petit tips : quand le deuxième clic d'une première pièce n'est pas sur une case autorisée par un coup légal, la case du deuxième du clic devient la case de départ !!
                             animate = False
+
             #Gestionnaire du clavier
             elif e.type == py.KEYDOWN:
                 if e.key == py.K_z: #undo depuis la touche Z (peut être changé)
                     B.undo_move(True)
+                    if pgn_history != []:
+                        pgn_history = pgn_history[:-1]
                     move_made,animate = True,False
                 if e.key == py.K_r: #Rester le board avec la touche 'r'
-                    B = Board()
-                    valid_moves,sq_selected,player_clicks = B.move_generation(WHITE),(),[]
+                    B.init()
+                    valid_moves,sq_selected,player_clicks,pgn_history = B.legal_move_generation(WHITE),(),[],[]
                     move_made,animate = False,False
 
         if move_made:
             if animate:
                 animate_move(mv,screen,B,clock,coordFont)
-                valid_moves,move_made,animate = B.move_generation(B.history[-1][2]),False,False
-        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont)
+                valid_moves,move_made,animate = B.legal_move_generation(B.side),False,False
+        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,[eval_bar_flag] + [current_evaluation]) #TODO board.eval
         clock.tick(MAX_FPS)
         py.display.flip()
 
-def highlight_squares(screen,B,valid_moves,sq_selected): #Surligne les cases légales pour une pièce sélectionnée
-    if sq_selected != ():
-        row,col = sq_selected
-        if True: #(gs.board[r][c][0] == ('w' if gs.whiteToMove else 'b'):) #Ici il faut faire un test sur le trait
-            #On la surligne!
-            s1,s2 = py.Surface((SQ_SIZE,SQ_SIZE)),py.Surface((SQ_SIZE,SQ_SIZE))
-            s1.set_alpha(100) #valeur de transparence (0 = transparent, 255 = opaque)
-            s2.set_alpha(50)
-            s1.fill(py.Color('blue'))
-            s2.fill(py.Color('green'))
-            screen.blit(s1,(col*SQ_SIZE,row*SQ_SIZE))
-            #On surligne sur les cases légales pour la pièce
-            for move in valid_moves:
-                case_depart = B.get_move_source(move)
-                case_arrivee = B.get_move_target(move)
-                start_row,start_col = case_depart//8,case_depart%8
-                end_row,end_col = case_arrivee//8,case_arrivee%8
-                if start_row == row and start_col == col:
-                    screen.blit(s2,(end_col*SQ_SIZE,end_row*SQ_SIZE))
+
+def highlight_squares(screen,B,valid_moves,sq_selected):
+    """Surligne les cases légales pour une pièce sélectionnée"""
+
+    row,col = sq_selected
+    s1,s2 = py.Surface((SQ_SIZE,SQ_SIZE)),py.Surface((SQ_SIZE,SQ_SIZE))
+    s1.set_alpha(90) #valeur de transparence (0 = transparent, 255 = opaque)
+    s1.fill(py.Color('blue'))
+    s2.set_alpha(50)
+    s2.fill(py.Color('blue'))
+    screen.blit(s2,(col*SQ_SIZE,row*SQ_SIZE))
+    #On surligne sur les cases légales pour la pièce
+    for move in valid_moves:
+        case_depart = B.get_move_source(move)
+        case_arrivee = B.get_move_target(move)
+        start_row,start_col = case_depart//8,case_depart%8
+        end_row,end_col = case_arrivee//8,case_arrivee%8
+        if start_row == row and start_col == col:
+            screen.blit(s1,(end_col*SQ_SIZE,end_row*SQ_SIZE))
 
 
 def draw_board(screen,font):
+    """Dessine l'échiquier (dont les numéros des cases)"""
+
     #colors = [p.Color("White"),vertSapin]
     for r in range(DIMENSION):
         for c in range(DIMENSION):
@@ -126,6 +152,8 @@ def draw_board(screen,font):
                 screen.blit(textObject,textLocation)
 
 def draw_pieces(screen,B):
+    """Dessine les pièces"""
+
     for r in range(DIMENSION):
         for c in range(DIMENSION):
             piece,case,occ_case = '',8*r+c,False #occ_case prend la valeur true si la case est occupée
@@ -162,15 +190,109 @@ def animate_move(move,screen,B,clock,font): #C'est pas le plus opti mais oklm ç
         py.display.flip()
         clock.tick(480)
 
+def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,bar):
+    """Trace le board et les pièces en fonction de l'état du jeu"""
+
+    if bar[0]:
+        draw_bar(screen,bar[1],coordFont)
+    draw_board(screen,coordFont)
+    if sq_selected != ():
+        highlight_squares(screen,B,valid_moves,sq_selected)
+    draw_pieces(screen,B)
+    draw_move_log(screen,moveLogFont,pgn_history,bar[0])
+
+def draw_bar(screen,val,font):
+    """Si la barre d'évalution est activée, cette fonction la dessine en prenant en compte
+    l'évaluation actuelle de la position"""
+
+    black_height = (1-activation_function(val))*(HEIGHT//2)
+    bar_rect = py.Rect(WIDTH,black_height,30,HEIGHT)
+    py.draw.rect(screen,py.Color('white'),bar_rect)
+    if val > 0:
+        screen.blit(font.render(str(val),True,py.Color('black')),(WIDTH+5,HEIGHT-20))
+    else:
+        screen.blit(font.render(str(abs(val)),True,py.Color('white')),(WIDTH+5,5))
 
 
-def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont):
-    draw_board(screen,coordFont) #Dessine le drawBoard
-    highlight_squares(screen,B,valid_moves,sq_selected)
-    #On peut ajouter des trucs (surligner les cases etc)
-    draw_pieces(screen,B) #Dessine les pièces
-    #draw_moveLog(screen,gs,moveLogFont) #TODO
-    #print("Je draw et je tourne en boucle")
+def draw_move_log(screen,font,history,bar_flag):
+    """Dessine un rectangle sur le côté où se trouvent les coups en format PGN"""
+
+    ajout_dim = 0
+    if bar_flag:
+        ajout_dim = 30
+
+    moveLogRect,moveLog,moveTexts,countMove = py.Rect(WIDTH + ajout_dim,0,MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT),history,[],1 #Début,début,taille, taille
+    py.draw.rect(screen,(28,28,28),moveLogRect)
+    for j in range(0,len(moveLog)): #Pour avoir 1. e4 e5 2. Nc3 Nf6
+        if j%2 == 0:
+            moveString = ' ' + str(countMove) + '. ' + moveLog[j] + ' '
+            countMove += 1
+        else:
+            moveString = moveLog[j]
+        moveTexts.append(moveString)
+    movesPerRow,padding,lineSpacing = 2,5,2 #Choix arbitraire de mettre un nb de moves sur les lignes
+    textY = padding
+    for i in range(0,len(moveTexts),movesPerRow):
+        text = " "
+        for k in range(movesPerRow):
+            if i+k < len(moveTexts):
+                text += moveTexts[i+k] + " "
+        textObject,textLocation = font.render(text,True,py.Color('white')),moveLogRect.move(padding,textY)#Comme ca ca décale
+        screen.blit(textObject,textLocation)
+        textY += textObject.get_height() + lineSpacing
+
+def options():
+    """Menu des options
+    Liste des options : - Jeu à deux ou contre l'ordi : 1 joueur / 2 joueurs
+                        - Profondeur : [|1:10|] sous forme de curseur sur une barre
+                        - Partie depuis fenboard : [case pour mettre la fenboard] / bouton charger
+                        - Barre d'éval ou non : Oui / Non"""
+
+
+def main():
+    """Menu d'accueil"""
+
+    flag = True
+    largeur = (FINAL_WIDTH)
+    hauteur = HEIGHT
+    eval_bar_flag = True #VALEUR DE BASE
+
+    def get_font(size):
+        #return py.font.SysFont("Montserrat",size,False,False)
+        return py.font.Font("assets/vcr.ttf", size)
+
+    while flag:
+        screen.blit(BACKGROUND, (0, 0))
+        MENU_MOUSE_POS = py.mouse.get_pos()
+
+        PLAY_BUTTON = Button(image=py.image.load("assets/bigrect.png"), pos=(largeur//2 + 10, hauteur//2 - 100),
+                            text_input="JOUER", font=get_font(80), base_color="#d4e6fc", hovering_color="White")
+        OPTIONS_BUTTON = Button(image=py.image.load("assets/bigrect.png"), pos=(largeur//2 + 10, hauteur//2),
+                            text_input="OPTIONS", font=get_font(80), base_color="#d4e6fc", hovering_color="White")
+        QUIT_BUTTON = Button(image=py.image.load("assets/bigrect.png"), pos=(largeur//2 + 10, hauteur//2 + 100),
+                            text_input="QUITTER", font=get_font(60), base_color="#d4e6fc", hovering_color="White")
+
+        for button in [PLAY_BUTTON, OPTIONS_BUTTON, QUIT_BUTTON]:
+            button.changeColor(MENU_MOUSE_POS)
+            button.update(screen)
+
+        for event in py.event.get():
+            if event.type == py.QUIT:
+                py.quit()
+                sys.exit()
+            if event.type == py.MOUSEBUTTONDOWN:
+                if PLAY_BUTTON.checkForInput(MENU_MOUSE_POS):
+                    print("PLAY")
+                    flag = False
+                    run(eval_bar_flag)
+                if OPTIONS_BUTTON.checkForInput(MENU_MOUSE_POS):
+                    print("OPTION")
+                    eval_bar_flag = True
+                    flag = False
+                if QUIT_BUTTON.checkForInput(MENU_MOUSE_POS):
+                    py.quit()
+                    sys.exit()
+        py.display.update()
 
 
 if __name__ == "__main__":
