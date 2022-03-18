@@ -822,5 +822,4 @@ class Board:
             if source == self.get_move_source(move) and target == self.get_move_target(move) and promotion == self.get_move_promotion(move):
                 return move
 
-        print("le coup n'est pas correct ou laisse le roi en echec")
         return -1

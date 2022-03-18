@@ -32,7 +32,7 @@ sounds = [py.mixer.Sound('assets/sounds/start.mp3'),py.mixer.Sound('assets/sound
 WIDTH,HEIGHT,DIMENSION = 512,512,8 #Dimension de l'échiquier
 SQ_SIZE = HEIGHT // DIMENSION #Taille des cases
 BAR_WIDTH,BAR_WIDTH = 0,0
-MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT,MAX_FPS,IMAGES = int(HEIGHT/3),HEIGHT,120,{} #GERE LE TICK POUR LES ANIMS ETC, SI ON A BESOIN DE RAM ON LE PASSE A TRES PEU
+MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT,MAX_FPS,IMAGES = int(HEIGHT/3),HEIGHT,60,{} #GERE LE TICK POUR LES ANIMS ETC, SI ON A BESOIN DE RAM ON LE PASSE A TRES PEU
 FINAL_WIDTH = WIDTH + MOVE_LOG_PANEL_WIDTH
 colsToFiles = {0:"a", 1:"b", 2:"c", 3:"d", 4:"e", 5:"f", 6:"g", 7:"h"}
 filesToCols = {v : k for k,v in colsToFiles.items()}
@@ -41,7 +41,7 @@ current_evaluation = 5
 screen = py.display.set_mode((FINAL_WIDTH,HEIGHT))
 BACKGROUND = py.transform.scale(py.image.load("assets/background.jpg"), (FINAL_WIDTH, HEIGHT))
 
-"""FONCTION AUXILIAIRES"""
+"""FONCTIONS AUXILIAIRES"""
 def loadImages():
     """ Initialise un dictionnaire global pour les images (une seule fois avec pygame sinon trop lourd)"""
 
@@ -149,7 +149,8 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False):
 
 
 def highlight_squares(screen,B,valid_moves,sq_selected):
-    """Surligne les cases légales pour une pièce sélectionnée"""
+    """Surligne les cases légales pour une pièce sélectionnée
+    Surligne aussi la case d'arrivée et de départ du dernier coup"""
 
     colors_soft = [soft_green,soft_white] = [(106,135,77),(214,214,189)]
     row,col = sq_selected
@@ -157,6 +158,8 @@ def highlight_squares(screen,B,valid_moves,sq_selected):
     s.set_alpha(90)
     s.fill(py.Color('yellow'))
     screen.blit(s,(col*SQ_SIZE,row*SQ_SIZE))
+
+
     #On surligne sur les cases légales pour la pièce
     for move in valid_moves:
         case_depart = B.get_move_source(move)
@@ -165,7 +168,7 @@ def highlight_squares(screen,B,valid_moves,sq_selected):
         end_row,end_col = case_arrivee//8,case_arrivee%8
         if start_row == row and start_col == col:
             color = colors_soft[((end_row+end_col)%2)-1]
-            py.draw.circle(screen,color,(64*end_col+32,64*end_row +32),16,16)
+            py.draw.circle(screen,color,(64*end_col+32,64*end_row +32),12,12)
             #screen.blit(s2,(end_col*SQ_SIZE,end_row*SQ_SIZE))
 
 
