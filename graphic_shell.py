@@ -1,3 +1,14 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Mar  8 14:20:06 2022
+
+@author: Corto Cristofoli
+@co-author : Jeunier Hugo
+@secret-author : Lance-Perlick Come
+
+INTERFACE GRAPHIQUE
+"""
+
 import pygame as py
 import board
 import time
@@ -21,7 +32,7 @@ MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT,MAX_FPS,IMAGES = int(HEIGHT/3),HEIGHT
 FINAL_WIDTH = WIDTH + MOVE_LOG_PANEL_WIDTH
 colsToFiles = {0:"a", 1:"b", 2:"c", 3:"d", 4:"e", 5:"f", 6:"g", 7:"h"}
 filesToCols = {v : k for k,v in colsToFiles.items()}
-current_evaluation = 3.5
+current_evaluation = 5
 
 screen = py.display.set_mode((FINAL_WIDTH,HEIGHT))
 BACKGROUND = py.transform.scale(py.image.load("assets/background.jpg"), (FINAL_WIDTH, HEIGHT))
@@ -49,10 +60,12 @@ def liste_to_move(l):
         s += CASES[8*row+col]
     return s
 
-def run(eval_bar_flag):
+def run(eval_bar_flag,nbjoueur,fen_list,depth=4):
     """Tourne en boucle et actualise en fonction le board en fonction des entrées de l'utilisateur"""
 
     B = board.Board()
+    if fen_list[0]:
+        B.set_fen(fen_list[1])
     py.init()
     screen.fill(py.Color("black"))
     valid_moves,move_made,animate,running,game_over = B.legal_move_generation(WHITE),False,False,True,False  #TODO Servira pour jouer uniquement des coups valides!#Flag utilisé lorsqu'un move est joué (est utile pour éviter les bugs),#flag pour savoir si on doit animer,#A voir quand il y aura les mats !! #TODO ce n'est pas pour tout de suite
@@ -246,16 +259,67 @@ def options():
     Liste des options : - Jeu à deux ou contre l'ordi : 1 joueur / 2 joueurs
                         - Profondeur : [|1:10|] sous forme de curseur sur une barre
                         - Partie depuis fenboard : [case pour mettre la fenboard] / bouton charger
-                        - Barre d'éval ou non : Oui / Non"""
+                        - Barre d'éval ou non : Oui / Non
+                        - Retour"""
+
+    flag = True
+    largeur = FINAL_WIDTH
+    hauteur = HEIGHT
+    eval_bar_flag = True
+    nbjoueurs = 1
+    depth = 4
+    fen_list = [False,'']
+
+
+    def get_font(size):
+        #return py.font.SysFont("Montserrat",size,False,False)
+        return py.font.Font("assets/vcr.ttf", size)
+
+    while flag:
+        screen.blit(BACKGROUND, (0, 0))
+        MENU_MOUSE_POS = py.mouse.get_pos()
+        button_list = []
+        texts_button_list = ["Joueur(s): " + str(nbjoueurs),"IA depth: " + str(depth),"Eval: " + str(eval_bar_flag),
+                            "FEN / PGN","Retour"]
+
+        for i in range(len(texts_button_list)):
+            button_list.append(Button(image=py.image.load("assets/midrect.png"), pos=(largeur//2 + 10, 50 + 100*i),
+                                text_input=texts_button_list[i], font=get_font(35), base_color="#d4e6fc", hovering_color="White"))
+
+
+        for button in button_list:
+            button.changeColor(MENU_MOUSE_POS)
+            button.update(screen)
+
+        for event in py.event.get():
+            if event.type == py.QUIT:
+                py.quit()
+                sys.exit()
+            if event.type == py.MOUSEBUTTONDOWN:
+                if button_list[0].checkForInput(MENU_MOUSE_POS):
+                    nbjoueurs = 1+(nbjoueurs%2)
+                if button_list[1].checkForInput(MENU_MOUSE_POS):
+                    depth = 1+(depth%7)
+                if button_list[2].checkForInput(MENU_MOUSE_POS):
+                    eval_bar_flag = not(eval_bar_flag)
+                if button_list[3].checkForInput(MENU_MOUSE_POS):
+                    print("3")
+                if button_list[4].checkForInput(MENU_MOUSE_POS):
+                    return eval_bar_flag,nbjoueurs,depth
+
+        py.display.update()
+
 
 
 def main():
     """Menu d'accueil"""
 
     flag = True
-    largeur = (FINAL_WIDTH)
+    largeur = FINAL_WIDTH
     hauteur = HEIGHT
     eval_bar_flag = True #VALEUR DE BASE
+    nbjoueurs = 1 #VALEUR DE BASE
+    depth = 4 #VALEUR DE BASE
 
     def get_font(size):
         #return py.font.SysFont("Montserrat",size,False,False)
@@ -282,13 +346,10 @@ def main():
                 sys.exit()
             if event.type == py.MOUSEBUTTONDOWN:
                 if PLAY_BUTTON.checkForInput(MENU_MOUSE_POS):
-                    print("PLAY")
                     flag = False
-                    run(eval_bar_flag)
+                    run(eval_bar_flag,nbjoueurs,[False,''],depth)
                 if OPTIONS_BUTTON.checkForInput(MENU_MOUSE_POS):
-                    print("OPTION")
-                    eval_bar_flag = True
-                    flag = False
+                    eval_bar_flag,nbjoueurs,depth = options()
                 if QUIT_BUTTON.checkForInput(MENU_MOUSE_POS):
                     py.quit()
                     sys.exit()
