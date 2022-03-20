@@ -134,6 +134,7 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False):
                     if pgn_history != []:
                         pgn_history = pgn_history[:-1]
                     move_made,animate = True,False
+                    valid_moves = B.legal_move_generation(B.side)
                 if e.key == py.K_r: #Rester le board avec la touche 'r'
                     B.init()
                     valid_moves,sq_selected,player_clicks,pgn_history = B.legal_move_generation(WHITE),(),[],[]
@@ -157,7 +158,13 @@ def highlight_squares(screen,B,valid_moves,sq_selected):
     s = py.Surface((SQ_SIZE,SQ_SIZE))
     s.set_alpha(90)
     s.fill(py.Color('yellow'))
-    screen.blit(s,(col*SQ_SIZE,row*SQ_SIZE))
+
+    case,occ_case = 8*row+col,False #occ_case prend la valeur true si la case d'arrivée est occupée
+    for i in range(12):
+        if B.get_bit(B.bitboard[i],case):
+            occ_case=True
+    if occ_case: #TODO test case vide
+        screen.blit(s,(col*SQ_SIZE,row*SQ_SIZE))
 
 
     #On surligne sur les cases légales pour la pièce
