@@ -31,7 +31,7 @@ sounds = [py.mixer.Sound('assets/sounds/start.mp3'),py.mixer.Sound('assets/sound
             py.mixer.Sound('assets/sounds/check0.mp3')]
 WIDTH,HEIGHT,DIMENSION = 512,512,8 #Dimension de l'échiquier
 SQ_SIZE = HEIGHT // DIMENSION #Taille des cases
-BAR_WIDTH,BAR_WIDTH = 0,0
+BAR_WIDTH = 0
 MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT,MAX_FPS,IMAGES = int(HEIGHT/3),HEIGHT,60,{} #GERE LE TICK POUR LES ANIMS ETC, SI ON A BESOIN DE RAM ON LE PASSE A TRES PEU
 FINAL_WIDTH = WIDTH + MOVE_LOG_PANEL_WIDTH
 colsToFiles = {0:"a", 1:"b", 2:"c", 3:"d", 4:"e", 5:"f", 6:"g", 7:"h"}
