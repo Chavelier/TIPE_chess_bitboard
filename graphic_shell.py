@@ -351,7 +351,6 @@ def options(eval_bar_flag0,nbjoueurs0,depth0):
 
 
     def get_font(size):
-        #return py.font.SysFont("Montserrat",size,False,False)
         return py.font.Font("assets/vcr.ttf", size)
 
     while flag:
