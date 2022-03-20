@@ -166,7 +166,31 @@ class Board:
         occ2 = occ0 | occ1
         print(occ0 == self.occupancies[0], occ1 == self.occupancies[1], occ2 == self.occupancies[2])
 
-    
+    # performance test
+    def perft(self,depth):
+        if depth == 0:
+            return 1
+        move_list = self.move_generation(self.side)
+        somme = 0
+        for mv in move_list:
+            if self.make_move(mv): # si le coup est legal le fait
+                somme += self.perft(depth-1)
+            self.undo_move(True)
+        return somme
+
+    @staticmethod
+    def get_ms():
+        return int(round(time.time() * 1000))
+
+    def perft_test(self,depth):
+        tic = Board.get_ms()
+        print("\n\nProfondeur   Nombres de coups")
+        for i in range(1,depth+1):
+            print("{0}            {1}".format(i,self.perft(i)))
+        tac = Board.get_ms()
+        print("\nTemps : %s ms"%(tac-tic))
+# performance test
+
     def set_fen(self,fen):
         '''Update le board en fonction d'un fenboard donné en argument'''
 
@@ -208,39 +232,44 @@ class Board:
             somme += dico[s]
         self.castle_right = somme #droits au roque
         self.add_to_history()
-        
-    # def perft_complet(self,depth,nb_coup,nb_capture,nb_ep,nb_castle,nb_prom,nb_check):
-    #     """ vérifie les performances de générations des coups """        
-        
-    #     if depth == 0:
-    #         return (nb_coup+1,nb_capture,nb_ep,nb_castle,nb_prom,nb_check)
-        
-    #     move_list = self.move_generation(self.side)
-    #     for mv in move_list:
-    #         if self.make_move(mv):
-    #         # self.square_is_attacked(self.l1sb_index(self.bitboard[R+self.side*6]), 1-self.side)
-    def perft(self,depth):
-        if depth == 0:
-            return 1
-        move_list = self.move_generation(self.side)
-        somme = 0
-        for mv in move_list:
-            if self.make_move(mv): # si le coup est legal le fait
-                somme += self.perft(depth-1)
-            self.undo_move(True)
-        return somme
-    
-    @staticmethod
-    def get_ms():
-        return int(round(time.time() * 1000))
-    
-    def perft_test(self,depth):
-        tic = Board.get_ms()
-        print("\n\nProfondeur   Nombres de coups")
-        for i in range(1,depth+1):
-            print("{0}            {1}".format(i,self.perft(i)))
-        tac = Board.get_ms()
-        print("\nTemps : %s ms"%(tac-tic))
+
+
+    def move_to_pgn(self,move,valid_moves):
+        "Prend en entrée un coup et renvoie sa traduction en PGN. Ex : Qxe5+"
+
+        if self.get_move_castling(move):
+            if self.get_move_target(move) == G1 or self.get_move_target(move) == G8:
+                return "O-O"
+            else: return "O-O-O"
+
+        txt = ''
+        piece = self.get_move_piece(move)
+        case_arrivee = self.get_move_target(move)
+        case_depart = self.get_move_source(move)
+
+        if piece == p or piece == P:
+            if self.get_move_capture(move):
+                txt += CASES[case_depart][0] + 'x'
+        else:
+            txt += PIECE_LETTER[piece].upper()
+            l,temp = valid_moves,''
+            for move_temp in l:
+                if self.get_move_target(move_temp) == case_arrivee and (move_temp != move):
+                    if self.get_move_piece(move_temp) == piece:
+                        case_depart_temp = self.get_move_source(move_temp)
+                        if case_depart_temp//8 == case_depart//8:
+                            temp += CASES[case_depart][1]
+                        else:
+                            temp += CASES[case_depart][0]
+            if self.get_move_capture(move):
+                temp = 'x' + temp
+            txt += temp
+
+        txt2 = ''
+        if self.square_is_attacked(self.ls1b_index(self.bitboard[K+self.side*6]),1-self.side):
+            txt2 += '+'
+
+        return txt + CASES[case_arrivee] + txt2
 
     # INITIALISATION DES ATTAQUES ###########################################################################
 
@@ -642,7 +671,8 @@ class Board:
                 self.undo_move(True)
         # print(L)
         return L
-        
+
+
     def print_move(self,side,legal=True):
         if legal:
             liste = self.legal_move_generation(side)
@@ -665,10 +695,10 @@ class Board:
     ############################################################################################################################################
     ##### // MAKE MOVE and UNDO MOVE FUNCTIONS // ##############################################################################################
     ############################################################################################################################################
-    
+
     def add_to_history(self):
         self.history.append((self.bitboard[:], self.occupancies[:], self.side, self.en_passant, self.castle_right))
-    
+
     def undo_move(self, real_move):
         """ annule le dernier coup, si real_move = True alors on supprime d'abord la dernière entrée de l'historique sinon non """
         if real_move and len(self.history) >= 2:
@@ -701,12 +731,12 @@ class Board:
 
             # on déplace la pièce
             self.bitboard[piece] = self.pop_bit(self.bitboard[piece], source)
-            
+
             if promote != NO_PIECE: # si il y a une promotion
                 self.bitboard[promote] = self.set_bit(self.bitboard[promote], target)
             else:
                 self.bitboard[piece] = self.set_bit(self.bitboard[piece], target)
-            
+
             self.occupancies[self.side] = self.pop_bit(self.occupancies[self.side], source)
             self.occupancies[self.side] = self.set_bit(self.occupancies[self.side], target)
             self.occupancies[2] = self.pop_bit(self.occupancies[2], source) # quel que soit le coup il n'y aura plus de piece sur la case d'origine
@@ -723,10 +753,10 @@ class Board:
                     self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target-8) # on retire la piece de l'occupance global de la couleur attaquée
                     self.occupancies[2] = self.pop_bit(self.occupancies[2], target-8)
                     self.occupancies[2] = self.set_bit(self.occupancies[2], target)
-            
+
             if capture:
                 self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target) # on retire la piece de l'occupance global de la couleur attaquée
-                
+
                 for i in range((1-self.side)*6,(2-self.side)*6): # on parcours les pieces de la couleur adverse
                     if self.get_bit(self.bitboard[i], target):
                         self.bitboard[i] = self.pop_bit(self.bitboard[i], target)
@@ -738,7 +768,7 @@ class Board:
                 self.en_passant = source + (-1 + 2*self.side)*8
             else:
                 self.en_passant = -1
-            
+
             if roque: # on doit deplacer la tour et enlever le droit au roque
                 if target == G1:
                     self.bitboard[R] = self.set_bit(self.bitboard[R], F1)
@@ -776,7 +806,7 @@ class Board:
                 self.castle_right &= 0b1100
             elif piece == k:
                 self.castle_right &= 0b0011
-            
+
             # on update les droits aux roques si une tour bouge ou si elle est capturée
             if (piece == R and source == H1) or target == H1:
                 self.castle_right &= 0b1110
@@ -786,27 +816,27 @@ class Board:
                 self.castle_right &= 0b1011
             elif (piece == r and source == A8) or target == A8:
                 self.castle_right &= 0b0111
-              
+
             #on vérifie si le roi n'est pas en échec
             if self.square_is_attacked(self.ls1b_index(self.bitboard[K+6*self.side]), 1-self.side):
                 self.undo_move(False)
                 return 0 # le coup est legal
-                
+
             # on finalise le coup
             self.side ^= 1 # on change de coté
             self.add_to_history()
             return 1 # le coup est legal
-    
-    
-    
+
+
+
     ############################################################################
     #### CONNECTIONS A L'INTERFACE #############################################
     ############################################################################
-    
+
     def trad_move(self,string):
         """ traduit le coup pour pouvoir l'utiliser """
         move_list = self.legal_move_generation(self.side)
-        
+
         source = CASES.index(string[0:2].lower())
         target = CASES.index(string[2:4].lower())
         prom = string[4]
@@ -817,5 +847,5 @@ class Board:
         for move in move_list:
             if source == self.get_move_source(move) and target == self.get_move_target(move) and promotion == self.get_move_promotion(move):
                 return move
-        print("le coup n'est pas correct ou laisse le roi en echec")
+        # le coup est incorrect ou laisse le roi en echec 
         return -1
