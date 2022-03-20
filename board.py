@@ -745,12 +745,12 @@ class Board:
             if enpass: # cas particulier : prise en passant
                 if self.side == WHITE:
                     self.bitboard[p] = self.pop_bit(self.bitboard[p], target+8)
-                    self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target+8) # on retire la piece de l'occupance global de la couleur attaquée
+                    self.occupancies[1] = self.pop_bit(self.occupancies[1], target+8) # on retire la piece de l'occupance global de la couleur attaquée
                     self.occupancies[2] = self.pop_bit(self.occupancies[2], target+8)
                     self.occupancies[2] = self.set_bit(self.occupancies[2], target)
                 else:
-                    self.bitboard[P] = self.pop_bit(self.bitboard[p], target-8)
-                    self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target-8) # on retire la piece de l'occupance global de la couleur attaquée
+                    self.bitboard[P] = self.pop_bit(self.bitboard[P], target-8)
+                    self.occupancies[0] = self.pop_bit(self.occupancies[0], target-8) # on retire la piece de l'occupance global de la couleur attaquée
                     self.occupancies[2] = self.pop_bit(self.occupancies[2], target-8)
                     self.occupancies[2] = self.set_bit(self.occupancies[2], target)
 
@@ -787,16 +787,16 @@ class Board:
                     self.occupancies[2] = self.pop_bit(self.occupancies[2], A1)
                     self.castle_right &= 0b1100
                 elif target == G8:
-                    self.bitboard[R] = self.set_bit(self.bitboard[R], F8)
-                    self.bitboard[R] = self.pop_bit(self.bitboard[R], H8)
+                    self.bitboard[r] = self.set_bit(self.bitboard[r], F8)
+                    self.bitboard[r] = self.pop_bit(self.bitboard[r], H8)
                     self.occupancies[1] = self.set_bit(self.occupancies[0], F8)
                     self.occupancies[1] = self.pop_bit(self.occupancies[0], H8)
                     self.occupancies[2] = self.set_bit(self.occupancies[2], F8)
                     self.occupancies[2] = self.pop_bit(self.occupancies[2], H8)
                     self.castle_right &= 0b0011
                 else:
-                    self.bitboard[R] = self.set_bit(self.bitboard[R], D8)
-                    self.bitboard[R] = self.pop_bit(self.bitboard[R], A8)
+                    self.bitboard[r] = self.set_bit(self.bitboard[r], D8)
+                    self.bitboard[r] = self.pop_bit(self.bitboard[r], A8)
                     self.occupancies[1] = self.set_bit(self.occupancies[1], D8)
                     self.occupancies[1] = self.pop_bit(self.occupancies[1], A8)
                     self.occupancies[2] = self.set_bit(self.occupancies[2], D8)
@@ -847,5 +847,5 @@ class Board:
         for move in move_list:
             if source == self.get_move_source(move) and target == self.get_move_target(move) and promotion == self.get_move_promotion(move):
                 return move
-        # le coup est incorrect ou laisse le roi en echec 
+        # le coup est incorrect ou laisse le roi en echec
         return -1

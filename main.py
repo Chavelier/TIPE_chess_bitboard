@@ -11,9 +11,9 @@ MAIN
 from board import *
 
 B = Board()
-B.print_board()
-B.set_fen('r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 5 4')
-B.print_board()
+# B.print_board()
+# B.set_fen('r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 5 4')
+# B.print_board()
 # B.print_move(WHITE)
 
 # move = B.encode_move(E4, D5, P, NO_PIECE, True, False, False, False)
@@ -37,3 +37,6 @@ B.print_board()
 #     B.is_occupancies_correct()
 #     B.undo_move(False)
 #     input("...")
+
+
+B.perft_test(4)
