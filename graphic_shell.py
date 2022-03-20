@@ -334,7 +334,7 @@ def pgn_or_fen():
         py.display.update()
 
 
-def options():
+def options(eval_bar_flag0,nbjoueurs0,depth0):
     """Menu des options
     Liste des options : - Jeu à deux ou contre l'ordi : 1 joueur / 2 joueurs
                         - Profondeur : [|1:10|] sous forme de curseur sur une barre
@@ -345,9 +345,9 @@ def options():
     flag = True
     largeur = FINAL_WIDTH
     hauteur = HEIGHT
-    eval_bar_flag = True
-    nbjoueurs = 1
-    depth = 4
+    eval_bar_flag = eval_bar_flag0
+    nbjoueurs = nbjoueurs0
+    depth = depth0
 
 
     def get_font(size):
@@ -428,7 +428,7 @@ def main():
                     flag = False
                     run(eval_bar_flag,nbjoueurs,'','',depth)
                 if OPTIONS_BUTTON.checkForInput(MENU_MOUSE_POS):
-                    eval_bar_flag,nbjoueurs,depth = options()
+                    eval_bar_flag,nbjoueurs,depth = options(eval_bar_flag,nbjoueurs,depth)
                 if QUIT_BUTTON.checkForInput(MENU_MOUSE_POS):
                     py.quit()
                     sys.exit()
