@@ -10,7 +10,7 @@ DEBUG SHELL
 """
 
 from board import *
-ascii_f = True
+ascii_f = False
 B = Board()
 
 
@@ -29,15 +29,17 @@ while cmd not in ["q","quit","exit"]:
         print("annuler un coup -> undo")
         print("activer/desactiver l'affichage ASCII -> ascii")
         print("afficher la liste des coups jouables -> moves")
-        print("charger un fen -> set fen rnbqkbnr/ppp2ppp/4p3/3p4/Q1PP4/8/PP2PPPP/RNB1KBNR b KQkq - 1 3 (ex)")
+        print("charger un fen -> fen rnbqkbnr/ppp2ppp/4p3/3p4/Q1PP4/8/PP2PPPP/RNB1KBNR b KQkq - 1 3 (ex)")
     elif cmd == "restart":
         B.init()
     elif cmd == "ascii":
         ascii_f = not ascii_f
     elif cmd == "moves":
         B.print_move(B.side)
-    elif "set fen" in cmd:
-        B.set_fen(cmd.split()[2:])
+    elif  cmd[0:4] == "fen ":
+        fen = str(cmd[4:])
+        print(fen)
+        B.set_fen(fen)
     elif cmd == "undo":
         B.undo_move(True)
     elif 4 <= len(cmd) <= 5:
