@@ -24,7 +24,6 @@ while cmd not in ["q","quit","exit"]:
     clear()
     print("Bienvenue dans le moteur d'echec de Corto et Hugo ! \n Tapez help pour les commandes... \n\n\n")
     if cmd == "help":
-        print("lancer l'affichage graphique -> graph")
         print("redemarer une nouvelle partie -> restart")
         print("jouer un coup -> (case de depart)(case d'arrivee)(promotion) (ex : e2e4 ou c2c1q)")
         print("annuler un coup -> undo")
