@@ -155,7 +155,8 @@ class Board:
             print("Trait : Blancs")
         if self.en_passant != -1:
             print("En passant : %s"%CASES[self.en_passant])
-        print("Droits au roque : %s \n\n"%bin(self.castle_right)[2:])
+        print("Droits au roque : %s"%bin(self.castle_right)[2:])
+        print("Evaluation côté blanc : %s"%self.evaluation())
 
     def is_occupancies_correct(self):
         occ0 = 0
@@ -827,6 +828,33 @@ class Board:
             self.add_to_history()
             return 1 # le coup est legal
 
+
+    ##########################################################################################
+    #### FONCTION D'EVALUATION ###############################################################
+    ##########################################################################################
+    
+    def evaluation(self,absolute=True):
+        """ Renvoi l'évaluation de la position actuelle 
+            absolute determine si on doit prendre la valeur opposée si ce sont les noirs qui jouent """
+        
+        val = 0
+        for piece in range(12):
+            bb = self.bitboard[piece]
+            while bb:
+                case = self.ls1b_index(bb)
+                bb = self.pop_bit(bb, case)
+                val += PIECE_VAL[piece]
+                if piece < 6: # piece blanche
+                    val += POS_SCORE[piece][case]
+                else:
+                    val -= POS_SCORE[piece-6][MIRROR_CASE[case]]
+        
+        if absolute or self.side == WHITE:
+            return val
+        else:
+            return -val
+        
+            
 
 
     ############################################################################
