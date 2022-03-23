@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+
+#TODO BUG CLICK TROP LONG QUI VIENT DE LAJOUT DU BOUTON MENU (DEPLACER LE TRUC?)
 """
 Created on Tue Mar  8 14:20:06 2022
 
@@ -31,6 +33,11 @@ sounds = [py.mixer.Sound('assets/sounds/start.mp3'),py.mixer.Sound('assets/sound
             py.mixer.Sound('assets/sounds/check0.mp3')]
 WIDTH,HEIGHT,DIMENSION = 512,512,8 #Dimension de l'échiquier
 SQ_SIZE = HEIGHT // DIMENSION #Taille des cases
+
+RED_CASE_CHECK = py.Surface((SQ_SIZE,SQ_SIZE))
+RED_CASE_CHECK.set_alpha(60)
+RED_CASE_CHECK.fill(py.Color('red'))
+
 BAR_WIDTH = 0
 MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT,MAX_FPS,IMAGES = int(HEIGHT/3),HEIGHT,60,{} #GERE LE TICK POUR LES ANIMS ETC, SI ON A BESOIN DE RAM ON LE PASSE A TRES PEU
 FINAL_WIDTH = WIDTH + MOVE_LOG_PANEL_WIDTH
@@ -66,7 +73,7 @@ def liste_to_move(l):
 
 
 """FONCTIONS D'AFFICHAGE"""
-def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False):
+def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False,history=[]):
     """Tourne en boucle et actualise le board en fonction des entrées de l'utilisateur"""
 
     B = board.Board()
@@ -79,7 +86,7 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False):
     valid_moves,move_made,animate,running,game_over = B.legal_move_generation(side),False,False,True,False  #TODO Servira pour jouer uniquement des coups valides!#Flag utilisé lorsqu'un move est joué (est utile pour éviter les bugs),#flag pour savoir si on doit animer,#A voir quand il y aura les mats !! #TODO ce n'est pas pour tout de suite
     loadImages() #On fait ça une seule fois avant la boucle while
     sounds[0].play()
-    sq_selected,player_clicks,pgn_history = (),[],[] #Pas de case sélectionnée initialement, tuple(row,col) #Garder la trace des cliques de l'utilisateur (deux tuples(row,col))
+    sq_selected,player_clicks,pgn_history = (),[],history #Pas de case sélectionnée initialement, tuple(row,col) #Garder la trace des cliques de l'utilisateur (deux tuples(row,col))
     moveLogFont,coordFont = py.font.SysFont("Montserrat",20,False,False),py.font.SysFont("Montserrat",18,False,False)
 
     def play_sound(mv):
@@ -93,6 +100,7 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False):
             sounds[1].play()
 
     while running:
+
         for e in py.event.get():
             if e.type == py.QUIT:
                 running = False
@@ -144,7 +152,8 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False):
             if animate:
                 animate_move(mv,screen,B,clock,coordFont)
                 valid_moves,move_made,animate = B.legal_move_generation(B.side),False,False
-        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,[eval_bar_flag] + [current_evaluation]) #TODO board.eval
+        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,[eval_bar_flag] + [current_evaluation],depth) #TODO board.eval
+
         clock.tick(MAX_FPS)
         py.display.flip()
 
@@ -166,7 +175,6 @@ def highlight_squares(screen,B,valid_moves,sq_selected):
     if occ_case: #TODO test case vide
         screen.blit(s,(col*SQ_SIZE,row*SQ_SIZE))
 
-
     #On surligne sur les cases légales pour la pièce
     for move in valid_moves:
         case_depart = B.get_move_source(move)
@@ -176,7 +184,6 @@ def highlight_squares(screen,B,valid_moves,sq_selected):
         if start_row == row and start_col == col:
             color = colors_soft[((end_row+end_col)%2)-1]
             py.draw.circle(screen,color,(64*end_col+32,64*end_row +32),12,12)
-            #screen.blit(s2,(end_col*SQ_SIZE,end_row*SQ_SIZE))
 
 
 def draw_board(screen,font):
@@ -238,7 +245,7 @@ def animate_move(move,screen,B,clock,font): #C'est pas le plus opti mais oklm ç
         clock.tick(480)
 
 
-def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,bar):
+def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,bar,depth):
     """Trace le board et les pièces en fonction de l'état du jeu"""
 
     if bar[0]:
@@ -246,8 +253,12 @@ def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_h
     draw_board(screen,coordFont)
     if sq_selected != ():
         highlight_squares(screen,B,valid_moves,sq_selected)
+    case = B.ls1b_index(B.bitboard[K+B.side*6])
+    if B.square_is_attacked(case,1-B.side):
+        row,col = case//8,case%8
+        screen.blit(RED_CASE_CHECK,(col*SQ_SIZE,row*SQ_SIZE))
     draw_pieces(screen,B)
-    draw_move_log(screen,moveLogFont,pgn_history,bar[0])
+    draw_move_log(screen,moveLogFont,pgn_history,bar[0],depth,B)
 
 
 def draw_bar(screen,val,font):
@@ -263,7 +274,7 @@ def draw_bar(screen,val,font):
         screen.blit(font.render(str(abs(val)),True,py.Color('white')),(WIDTH+5,5))
 
 
-def draw_move_log(screen,font,history,bar_flag):
+def draw_move_log(screen,font,history,bar_flag,depth,B):
     """Dessine un rectangle sur le côté où se trouvent les coups en format PGN"""
 
     ajout_dim = 0
@@ -289,6 +300,19 @@ def draw_move_log(screen,font,history,bar_flag):
         textObject,textLocation = font.render(text,True,py.Color('white')),moveLogRect.move(padding,textY)#Comme ca ca décale
         screen.blit(textObject,textLocation)
         textY += textObject.get_height() + lineSpacing
+
+    parametre_button = Button(image=py.image.load("assets/setting_button.png"), pos=(WIDTH + MOVE_LOG_PANEL_WIDTH - 20,HEIGHT -20),
+                            text_input="", font=py.font.Font("assets/vcr.ttf", 20), base_color="#d4e6fc", hovering_color="White")
+
+    for event in py.event.get():
+        if event.type == py.MOUSEBUTTONDOWN:
+            location = py.mouse.get_pos()
+            if parametre_button.checkForInput(location):
+                options_in_game(bar_flag,depth,B,history)
+
+    location = py.mouse.get_pos()
+    parametre_button.changeColor(location)
+    parametre_button.update(screen)
 
 
 def pgn_or_fen():
@@ -340,6 +364,69 @@ def pgn_or_fen():
 
         py.display.update()
 
+def options_in_game(eval_bar_flag0,depth0,B,pgn_history):
+    """Menu des options
+    Liste des options en cours de jeu:
+                        - Profondeur : [|1:10|] sous forme de curseur sur une barre
+                        - Barre d'éval ou non : Oui / Non
+                        - Sauvegarder PGN/FEN
+                        - Retour"""
+
+    flag = True
+    largeur = FINAL_WIDTH
+    hauteur = HEIGHT
+    eval_bar_flag = eval_bar_flag0
+    depth = depth0
+
+
+    def get_font(size):
+        return py.font.Font("assets/vcr.ttf", size)
+
+    while flag:
+        screen.blit(BACKGROUND, (0, 0))
+        MENU_MOUSE_POS = py.mouse.get_pos()
+        button_list = []
+        texts_button_list = ["IA depth: " + str(depth),"Eval: " + str(eval_bar_flag),
+                            "Save FEN","Save PGN","Retour"]
+
+        for i in range(len(texts_button_list)):
+            button_list.append(Button(image=py.image.load("assets/midrect.png"), pos=(largeur//2 + 10, 50 + 100*i),
+                                text_input=texts_button_list[i], font=get_font(35), base_color="#d4e6fc", hovering_color="White"))
+
+
+        for button in button_list:
+            button.changeColor(MENU_MOUSE_POS)
+            button.update(screen)
+
+        for event in py.event.get():
+            if event.type == py.QUIT:
+                py.quit()
+                sys.exit()
+            if event.type == py.MOUSEBUTTONDOWN:
+                if button_list[0].checkForInput(MENU_MOUSE_POS):
+                    depth = 1+(depth%7)
+                if button_list[1].checkForInput(MENU_MOUSE_POS):
+                    eval_bar_flag = not(eval_bar_flag)
+                if button_list[2].checkForInput(MENU_MOUSE_POS):
+                    pyperclip.copy(B.get_fen())
+                    print("FEN copié")
+                if button_list[3].checkForInput(MENU_MOUSE_POS):
+                    count_move = 1
+                    txt = ''
+                    for i in range(len(pgn_history)):
+                        if i%2 == 0:
+                            txt += ' ' + str(count_move) + '. ' + pgn_history[i] + ' '
+                            count_move += 1
+                        else:
+                            txt += pgn_history[i]
+                    pyperclip.copy(txt[1:-1])
+                    print("PGN copié")
+                if button_list[4].checkForInput(MENU_MOUSE_POS):
+                    CTRLV = B.get_fen()
+                    flag = False
+                    run(eval_bar_flag,1,CTRLV,CTRLV,depth,FEN=True,history=pgn_history)
+
+        py.display.update()
 
 def options(eval_bar_flag0,nbjoueurs0,depth0):
     """Menu des options

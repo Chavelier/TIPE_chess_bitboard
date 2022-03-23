@@ -233,6 +233,53 @@ class Board:
         self.castle_right = somme #droits au roque
         self.add_to_history()
 
+    def get_fen(self):
+        """Code la position en Notation Forsyth-Edwards"""
+
+        placement_pieces = ''
+        for i in range(8): #Pour chaque ligne
+            ligne = ''
+            vide = 0
+            for j in range(8): #Pour chaque colonne
+                case,occ_case = 8*i+j,False
+                for k in range(12):
+                    if self.get_bit(self.bitboard[k],case):
+                        print(PIECE_LETTER[k])
+                        if vide != 0:
+                            ligne += str(vide)
+                        ligne += PIECE_LETTER[k]
+                        vide,occ_case = 0,True
+                if not(occ_case):
+                    vide += 1
+            if vide != 0:
+                ligne += str(vide)
+            placement_pieces += ligne + "/"
+
+        fenboard = placement_pieces[:-1]
+
+
+        if self.side == WHITE:
+            fenboard += ' w '
+        else:
+            fenboard += ' b '
+
+        droit_aux_roques = ''
+        if self.castle_right & 1: # king castling
+            droit_aux_roques += 'K'
+        if self.castle_right & 2: # queen castling
+            droit_aux_roques += 'Q'
+
+        if self.castle_right & 4: # king castling
+            droit_aux_roques += 'k'
+        if self.castle_right & 8: # queen castling
+            droit_aux_roques += 'q'
+        fenboard += droit_aux_roques + ' '
+
+        if self.en_passant != -1:
+            fenboard += CASES[self.en_passant] + ' '
+        else:
+            fenboard += '- '
+        return fenboard + '0 1' #TODO LE COMPTAGE
 
     def move_to_pgn(self,move,valid_moves):
         "Prend en entrée un coup et renvoie sa traduction en PGN. Ex : Qxe5+"
