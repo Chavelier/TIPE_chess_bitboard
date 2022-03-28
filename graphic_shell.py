@@ -43,7 +43,7 @@ MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT,MAX_FPS,IMAGES = int(HEIGHT/3),HEIGHT
 FINAL_WIDTH = WIDTH + MOVE_LOG_PANEL_WIDTH
 colsToFiles = {0:"a", 1:"b", 2:"c", 3:"d", 4:"e", 5:"f", 6:"g", 7:"h"}
 filesToCols = {v : k for k,v in colsToFiles.items()}
-current_evaluation = 5
+current_evaluation = 5.0
 
 screen = py.display.set_mode((FINAL_WIDTH,HEIGHT))
 BACKGROUND = py.transform.scale(py.image.load("assets/background.jpg"), (FINAL_WIDTH, HEIGHT))
@@ -89,6 +89,7 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False,hi
     sq_selected,player_clicks,pgn_history = (),[],history #Pas de case sélectionnée initialement, tuple(row,col) #Garder la trace des cliques de l'utilisateur (deux tuples(row,col))
     moveLogFont,coordFont = py.font.SysFont("Montserrat",20,False,False),py.font.SysFont("Montserrat",18,False,False)
 
+
     def play_sound(mv):
         if B.get_move_capture(mv):
             sounds[2].play()
@@ -100,7 +101,6 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False,hi
             sounds[1].play()
 
     while running:
-
         for e in py.event.get():
             if e.type == py.QUIT:
                 running = False
@@ -152,8 +152,8 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False,hi
             if animate:
                 animate_move(mv,screen,B,clock,coordFont)
                 valid_moves,move_made,animate = B.legal_move_generation(B.side),False,False
-        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,[eval_bar_flag] + [current_evaluation],depth) #TODO board.eval
-
+        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,[eval_bar_flag] + [current_evaluation]) #TODO board.eval
+        draw_menu_buttons(screen,eval_bar_flag,depth,B,history)
         clock.tick(MAX_FPS)
         py.display.flip()
 
@@ -245,7 +245,7 @@ def animate_move(move,screen,B,clock,font): #C'est pas le plus opti mais oklm ç
         clock.tick(480)
 
 
-def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,bar,depth):
+def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,bar):
     """Trace le board et les pièces en fonction de l'état du jeu"""
 
     if bar[0]:
@@ -258,7 +258,7 @@ def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_h
         row,col = case//8,case%8
         screen.blit(RED_CASE_CHECK,(col*SQ_SIZE,row*SQ_SIZE))
     draw_pieces(screen,B)
-    draw_move_log(screen,moveLogFont,pgn_history,bar[0],depth,B)
+    draw_move_log(screen,moveLogFont,pgn_history,bar[0])
 
 
 def draw_bar(screen,val,font):
@@ -274,14 +274,14 @@ def draw_bar(screen,val,font):
         screen.blit(font.render(str(abs(val)),True,py.Color('white')),(WIDTH+5,5))
 
 
-def draw_move_log(screen,font,history,bar_flag,depth,B):
+def draw_move_log(screen,font,history,bar_flag):
     """Dessine un rectangle sur le côté où se trouvent les coups en format PGN"""
 
     ajout_dim = 0
     if bar_flag:
         ajout_dim = 30
 
-    moveLogRect,moveLog,moveTexts,countMove = py.Rect(WIDTH + ajout_dim,0,MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT),history,[],1 #Début,début,taille, taille
+    moveLogRect,moveLog,moveTexts,countMove = py.Rect(WIDTH + ajout_dim,0,MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT-30),history,[],1 #Début,début,taille, taille
     py.draw.rect(screen,(28,28,28),moveLogRect)
     for j in range(0,len(moveLog)): #Pour avoir 1. e4 e5 2. Nc3 Nf6
         if j%2 == 0:
@@ -301,19 +301,28 @@ def draw_move_log(screen,font,history,bar_flag,depth,B):
         screen.blit(textObject,textLocation)
         textY += textObject.get_height() + lineSpacing
 
+
+def draw_menu_buttons(screen,bar_flag,depth,B,history):
+    """ Dessine une barre de menu en dessous du rectangle de l'historique"""
+
+    ajout_dim = 0
+    if bar_flag:
+        ajout_dim = 30
+
     parametre_button = Button(image=py.image.load("assets/setting_button.png"), pos=(WIDTH + MOVE_LOG_PANEL_WIDTH - 20,HEIGHT -20),
-                            text_input="", font=py.font.Font("assets/vcr.ttf", 20), base_color="#d4e6fc", hovering_color="White")
-
-    for event in py.event.get():
-        if event.type == py.MOUSEBUTTONDOWN:
-            location = py.mouse.get_pos()
-            if parametre_button.checkForInput(location):
-                options_in_game(bar_flag,depth,B,history)
-
+                                    text_input="", font=py.font.Font("assets/vcr.ttf", 20), base_color="#d4e6fc", hovering_color="White")
     location = py.mouse.get_pos()
     parametre_button.changeColor(location)
     parametre_button.update(screen)
+    rect = py.Rect(WIDTH + ajout_dim,MOVE_LOG_PANEL_HEIGHT-30,MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT)#Début,début,taille, taille
+    py.draw.rect(screen,(28,28,28),rect)
 
+    if parametre_button.checkForInput(location):
+        for e in py.event.get():
+            if e.type == py.MOUSEBUTTONDOWN:
+                options_in_game(bar_flag,depth,B,history)
+    parametre_button.changeColor(location)
+    parametre_button.update(screen)
 
 def pgn_or_fen():
     """Lancer une position FEN ou une partie PGN"""
