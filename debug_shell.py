@@ -10,8 +10,11 @@ DEBUG SHELL
 """
 
 from board import *
+import pyperclip
+
 ascii_f = False
 B = Board()
+pyperclip.copy(B.get_fen())
 
 
 def clear():
