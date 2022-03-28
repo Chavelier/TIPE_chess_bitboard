@@ -874,6 +874,27 @@ class Board:
             self.add_to_history()
             return 1 # le coup est legal
 
+    def evaluation(self,absolute=True):
+        """ Renvoi l'évaluation de la position actuelle
+            absolute determine si on doit prendre la valeur opposée si ce sont les noirs qui jouent """
+
+        val = 0
+        for piece in range(12):
+            bb = self.bitboard[piece]
+            while bb:
+                case = self.ls1b_index(bb)
+                bb = self.pop_bit(bb, case)
+                val += PIECE_VAL[piece]
+                if piece < 6: # piece blanche
+                    val += POS_SCORE[piece][case]
+                else:
+                    val -= POS_SCORE[piece-6][MIRROR_CASE[case]]
+
+        if absolute or self.side == WHITE:
+            return val
+        else:
+            return -val
+
 
 
     ############################################################################

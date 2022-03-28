@@ -43,7 +43,7 @@ MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT,MAX_FPS,IMAGES = int(HEIGHT/3),HEIGHT
 FINAL_WIDTH = WIDTH + MOVE_LOG_PANEL_WIDTH
 colsToFiles = {0:"a", 1:"b", 2:"c", 3:"d", 4:"e", 5:"f", 6:"g", 7:"h"}
 filesToCols = {v : k for k,v in colsToFiles.items()}
-current_evaluation = 5.0
+current_evaluation = 0
 
 screen = py.display.set_mode((FINAL_WIDTH,HEIGHT))
 BACKGROUND = py.transform.scale(py.image.load("assets/background.jpg"), (FINAL_WIDTH, HEIGHT))
@@ -152,7 +152,7 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False,hi
             if animate:
                 animate_move(mv,screen,B,clock,coordFont)
                 valid_moves,move_made,animate = B.legal_move_generation(B.side),False,False
-        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,[eval_bar_flag] + [current_evaluation]) #TODO board.eval
+        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,[eval_bar_flag] + [round(B.evaluation()/100,1)]) #TODO board.eval
         draw_menu_buttons(screen,eval_bar_flag,depth,B,history)
         clock.tick(MAX_FPS)
         py.display.flip()
@@ -265,9 +265,13 @@ def draw_bar(screen,val,font):
     """Si la barre d'évalution est activée, cette fonction la dessine en prenant en compte
     l'évaluation actuelle de la position"""
 
+
     black_height = (1-activation_function(val))*(HEIGHT//2)
-    bar_rect = py.Rect(WIDTH,black_height,30,HEIGHT)
-    py.draw.rect(screen,py.Color('white'),bar_rect)
+    white_bar_rect = py.Rect(WIDTH,black_height,30,HEIGHT-black_height)
+    py.draw.rect(screen,py.Color('white'),white_bar_rect)
+    black_bar_rect = py.Rect(WIDTH,0,30,black_height)
+    py.draw.rect(screen,py.Color('black'),black_bar_rect)
+
     if val > 0:
         screen.blit(font.render(str(val),True,py.Color('black')),(WIDTH+5,HEIGHT-20))
     else:
