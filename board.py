@@ -176,7 +176,7 @@ class Board:
         for mv in move_list:
             if self.make_move(mv): # si le coup est legal le fait
                 somme += self.perft(depth-1)
-            self.undo_move(True)
+                self.undo_move(True)
         return somme
 
     @staticmethod
@@ -577,17 +577,17 @@ class Board:
                     while is_attacking:
                         arrivee = self.ls1b_index(is_attacking)
                         if arrivee <= H8: #on mange et on promotionne
-                            move_list.append(self.encode_move(depart, arrivee, P, Q, 1, 0, 0, 0))
-                            move_list.append(self.encode_move(depart, arrivee, P, R, 1, 0, 0, 0))
-                            move_list.append(self.encode_move(depart, arrivee, P, B, 1, 0, 0, 0))
-                            move_list.append(self.encode_move(depart, arrivee, P, N, 1, 0, 0, 0))
+                            move_list.insert(0,self.encode_move(depart, arrivee, P, Q, 1, 0, 0, 0))
+                            move_list.insert(0,self.encode_move(depart, arrivee, P, R, 1, 0, 0, 0))
+                            move_list.insert(0,self.encode_move(depart, arrivee, P, B, 1, 0, 0, 0))
+                            move_list.insert(0,self.encode_move(depart, arrivee, P, N, 1, 0, 0, 0))
                         else:
-                            move_list.append(self.encode_move(depart,arrivee,P,NO_PIECE,1,0,0,0))
+                            move_list.insert(0,self.encode_move(depart,arrivee,P,NO_PIECE,1,0,0,0))
                         is_attacking = self.pop_bit(is_attacking, arrivee)
 
                     # prise en passant
                     if self.en_passant != -1 and (self.pawn_attack[0][depart] & (1<<self.en_passant)):
-                        move_list.append(self.encode_move(depart, self.en_passant, P, NO_PIECE, 1, 0, 1, 0))
+                        move_list.insert(0,self.encode_move(depart, self.en_passant, P, NO_PIECE, 1, 0, 1, 0))
 
                     # coup de pion blanc discret
                     arrivee = depart - 8
@@ -614,17 +614,17 @@ class Board:
                     while is_attacking:
                         arrivee = self.ls1b_index(is_attacking)
                         if arrivee >= A1: #on mange et on promotionne
-                            move_list.append(self.encode_move(depart, arrivee, p, q, 1, 0, 0, 0))
-                            move_list.append(self.encode_move(depart, arrivee, p, r, 1, 0, 0, 0))
-                            move_list.append(self.encode_move(depart, arrivee, p, b, 1, 0, 0, 0))
-                            move_list.append(self.encode_move(depart, arrivee, p, n, 1, 0, 0, 0))
+                            move_list.insert(0,self.encode_move(depart, arrivee, p, q, 1, 0, 0, 0))
+                            move_list.insert(0,self.encode_move(depart, arrivee, p, r, 1, 0, 0, 0))
+                            move_list.insert(0,self.encode_move(depart, arrivee, p, b, 1, 0, 0, 0))
+                            move_list.insert(0,self.encode_move(depart, arrivee, p, n, 1, 0, 0, 0))
                         else:
-                            move_list.append(self.encode_move(depart, arrivee, p, NO_PIECE, 1, 0, 0, 0))
+                            move_list.insert(0,self.encode_move(depart, arrivee, p, NO_PIECE, 1, 0, 0, 0))
 
                         is_attacking = self.pop_bit(is_attacking, arrivee)
                     # prise en passant
                     if self.en_passant != -1 and (self.pawn_attack[1][depart] & (1<<self.en_passant)):
-                        move_list.append(self.encode_move(depart, self.en_passant, p, NO_PIECE, 1, 0, 1, 0))
+                        move_list.insert(0,self.encode_move(depart, self.en_passant, p, NO_PIECE, 1, 0, 1, 0))
 
                     # coup de pion noir discret
                     arrivee = depart + 8 # + pour noir - pour blanc
@@ -646,7 +646,7 @@ class Board:
                     depart = self.ls1b_index(bb)
                     bb = self.pop_bit(bb, depart) # on enlève la case de départ afin de regarder ensuite les suivantes
                     if piece in [K,k]:
-                        attack_map = self.king_attack[depart] & ~(self.occupancies[side]) # on ne regarde pas les cases où il y a des pieces de la même couleur.
+                        attack_map = self.king_attack[depart] & ~(self.occupancies[side]) # on ne regarde pas les cases où il y a nos propres pieces puisqu'on ne peut pas y aller.
                     elif piece in [N,n]:
                         attack_map = self.knight_attack[depart] & ~(self.occupancies[side])
                     elif piece in [B,b]:
@@ -658,7 +658,10 @@ class Board:
                     while attack_map:
                         arrivee = self.ls1b_index(attack_map)
                         attack_map = self.pop_bit(attack_map, arrivee)
-                        move_list.append(self.encode_move(depart, arrivee, piece, NO_PIECE, self.get_bit(self.occupancies[2], arrivee), 0, 0, 0))
+                        if self.get_bit(self.occupancies[2], arrivee): # il y a une prise
+                            move_list.insert(0,self.encode_move(depart, arrivee, piece, NO_PIECE, 1, 0, 0, 0)) #on met les captures au début de la liste
+                        else:
+                            move_list.append(self.encode_move(depart, arrivee, piece, NO_PIECE, 0, 0, 0, 0))
 
 
         return move_list
