@@ -39,7 +39,10 @@ while cmd not in ["q","quit","exit"]:
         ascii_f = not ascii_f
     elif cmd == "moves":
         B.print_move(B.side)
-    elif  cmd[0:4] == "fen ":
+    elif cmd[0:9] == "bitboard ":
+        print(PIECE_LETTER.index(cmd[9:]))
+        B.print_bb(PIECE_LETTER.index(cmd[9:]))
+    elif cmd[0:4] == "fen ":
         fen = str(cmd[4:])
         print(fen)
         B.set_fen(fen)

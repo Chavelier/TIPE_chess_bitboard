@@ -196,12 +196,12 @@ def draw_board(screen,font):
             py.draw.rect(screen,color,case)
             if r == 7:
                 text = colsToFiles[c]
-                textObject,textLocation = font.render(text,True,colors[((r+c)%2)-1]),case.move(SQ_SIZE-10,SQ_SIZE-13) #Comme ca ca décale
-                screen.blit(textObject,textLocation)
+                text_object,text_location = font.render(text,True,colors[((r+c)%2)-1]),case.move(SQ_SIZE-10,SQ_SIZE-13) #Comme ca ca décale
+                screen.blit(text_object,text_location)
             if c == 0:
                 text = str(DIMENSION-r)
-                textObject,textLocation = font.render(text,True,colors[((r+c)%2)-1]),case.move(3,2) #Comme ca ca décale
-                screen.blit(textObject,textLocation)
+                text_object,text_location = font.render(text,True,colors[((r+c)%2)-1]),case.move(3,2) #Comme ca ca décale
+                screen.blit(text_object,text_location)
 
 
 def draw_pieces(screen,B):
@@ -259,6 +259,8 @@ def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_h
         screen.blit(RED_CASE_CHECK,(col*SQ_SIZE,row*SQ_SIZE))
     draw_pieces(screen,B)
     draw_move_log(screen,moveLogFont,pgn_history,bar[0])
+    #draw_move_log(screen,moveLogFont,[CASES[i%64] for i in range(200)],bar[0])
+
 
 
 def draw_bar(screen,val,font):
@@ -284,26 +286,31 @@ def draw_move_log(screen,font,history,bar_flag):
     ajout_dim = 0
     if bar_flag:
         ajout_dim = 30
+    n = len(history)
 
-    moveLogRect,moveLog,moveTexts,countMove = py.Rect(WIDTH + ajout_dim,0,MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT-30),history,[],1 #Début,début,taille, taille
-    py.draw.rect(screen,(28,28,28),moveLogRect)
-    for j in range(0,len(moveLog)): #Pour avoir 1. e4 e5 2. Nc3 Nf6
+    move_log_rect,move_texts,count_move = py.Rect(WIDTH + ajout_dim,0,MOVE_LOG_PANEL_WIDTH,MOVE_LOG_PANEL_HEIGHT-30),[],1 #Début,début,taille, taille
+    py.draw.rect(screen,(28,28,28),move_log_rect)
+    for j in range(0,n): #Pour avoir 1. e4 e5 2. Nc3 Nf6
         if j%2 == 0:
-            moveString = ' ' + str(countMove) + '. ' + moveLog[j] + ' '
-            countMove += 1
+            move_string = ' ' + str(count_move) + '. ' + history[j] + ' '
+            count_move += 1
         else:
-            moveString = moveLog[j]
-        moveTexts.append(moveString)
-    movesPerRow,padding,lineSpacing = 2,5,2 #Choix arbitraire de mettre un nb de moves sur les lignes
+            move_string = history[j]
+        move_texts.append(move_string)
+    if count_move >= 31:
+        if n%2 != 0:
+            n += 1
+        move_texts = move_texts[n-count_move + count_move%2 - 20:]
+    moves_per_row,padding,line_spacing = 2,5,2 #Choix arbitraire de mettre un nb de moves sur les lignes
     textY = padding
-    for i in range(0,len(moveTexts),movesPerRow):
+    for i in range(0,len(move_texts),moves_per_row):
         text = " "
-        for k in range(movesPerRow):
-            if i+k < len(moveTexts):
-                text += moveTexts[i+k] + " "
-        textObject,textLocation = font.render(text,True,py.Color('white')),moveLogRect.move(padding,textY)#Comme ca ca décale
-        screen.blit(textObject,textLocation)
-        textY += textObject.get_height() + lineSpacing
+        for k in range(moves_per_row):
+            if i+k < len(move_texts):
+                text += move_texts[i+k] + " "
+        text_object,text_location = font.render(text,True,py.Color('white')),move_log_rect.move(padding,textY)#Comme ca ca décale
+        screen.blit(text_object,text_location)
+        textY += text_object.get_height() + line_spacing
 
 
 def draw_menu_buttons(screen,bar_flag,depth,B,history):

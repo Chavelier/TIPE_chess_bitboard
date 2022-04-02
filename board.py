@@ -875,10 +875,40 @@ class Board:
             return 1 # le coup est legal
 
     def evaluation(self,absolute=True):
-        """ Renvoi l'évaluation de la position actuelle
-            absolute determine si on doit prendre la valeur opposée si ce sont les noirs qui jouent """
+        """ Renvoie l'évaluation de la position actuelle
+            absolute determine si on doit prendre la valeur opposée si ce sont les noirs qui jouent
+
+            material [t] [mg|eg|ph] Material score, where each piece on the board has a predefined value
+                                    that changes depending on the phase of the game.
+            imbalance [t] [mg|eg|ph] Imbalance score that compares the piece count of each piece type for both
+                                        colours. E.g., it awards having a pair of bishops vs a bishop and a knight.
+            pawns [t] [mg|eg|ph] Evaluation of the pawn structure. E.g., the evaluation considers isolated,
+                                    double, connected, backward, blocked, weak, etc. pawns.
+            knights [t] [mg|eg|ph] Evaluation of knights. E.g., extra points are given to knights
+                                    that occupy outposts protected by pawns.
+            bishops [t] [mg|eg|ph] Evaluation of bishops. E.g., bishops that occupy the same color squares
+                                    as pawns are penalised.
+            rooks [t] [mg|eg|ph] Evaluation of rooks. E.g., rooks that occupy open or semi-open files
+                                    have higher valuation.
+            queens [t] [mg|eg|ph] Evaluation of queens. E.g., queens that have relative pin or discovered
+                                    attack against them are penalized.
+            mobility [t] [mg|eg|ph] Evaluation of piece mobility score. It depends on
+                                    the number of squares attacked by the pieces.
+            king_safety [t] [mg|eg|ph] A complex concept related to king safety. It depends on the number
+                                        and type of pieces that attack squares around the king, shelter strength,
+                                        number of pawns around the king, penalties for being on pawnless flank, etc.
+            threats [t] [mg|eg|ph] Evaluation of threats to pieces, such as whether a pawn can safely advance
+                                    and attack an opponent’s higher value piece, hanging pieces,
+                                    possible xray attacks by rooks, etc.
+            passed_pawns [t] [mg|eg|ph] Evaluates bonuses for passed pawns. The closer a pawn is to the promotion
+                                        rank, the higher is the bonus.
+            space [t] [mg|eg|ph] Evaluation of the space. It depends on the number of safe squares available
+                                    for minor pieces on the central four files on ranks 2 to 4.
+            total [t] [mg|eg|ph] The total evaluation of a given position. It encapsulates all the above concepts."""
+
 
         val = 0
+        nb_fou = 0
         for piece in range(12):
             bb = self.bitboard[piece]
             while bb:
