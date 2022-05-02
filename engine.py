@@ -30,7 +30,6 @@ class Engine:
             return board.evaluation()
 
         self.nodes += 1
-
         old_alpha = alpha
 
         move_list = board.move_generation(board.side)
