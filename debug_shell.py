@@ -10,11 +10,13 @@ DEBUG SHELL
 """
 
 from board import *
+from engine import *
 import pyperclip
 
 ascii_f = False
 B = Board()
-pyperclip.copy(B.get_fen())
+E = Engine()
+
 
 
 def clear():
@@ -30,15 +32,24 @@ while cmd not in ["q","quit","exit"]:
         print("redemarer une nouvelle partie -> restart")
         print("jouer un coup -> (case de depart)(case d'arrivee)(promotion) (ex : e2e4 ou c2c1q)")
         print("annuler un coup -> undo")
+        print("jouer un coup d'ordinateur -> go")
         print("activer/desactiver l'affichage ASCII -> ascii")
         print("afficher la liste des coups jouables -> moves")
         print("charger un fen -> fen rnbqkbnr/ppp2ppp/4p3/3p4/Q1PP4/8/PP2PPPP/RNB1KBNR b KQkq - 1 3 (ex)")
+        print("copier le fen -> cfen")
     elif cmd == "restart":
         B.init()
     elif cmd == "ascii":
         ascii_f = not ascii_f
+    elif cmd == "go":
+        score,mv = E.bot_move(3, B)
+        coup = CASES[B.get_move_source(mv)]+CASES[B.get_move_target(mv)]
+        piece = B.get_move_piece(mv)
+        print("piece : {} \nmeilleur coup : {} \nscore : {}".format(piece,coup, score))
     elif cmd == "moves":
         B.print_move(B.side)
+    elif cmd == "cfen":
+        pyperclip.copy(B.get_fen())
     elif  cmd[0:4] == "fen ":
         fen = str(cmd[4:])
         print(fen)
