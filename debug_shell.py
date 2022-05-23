@@ -11,7 +11,7 @@ DEBUG SHELL
 
 from board import *
 from engine import *
-import pyperclip
+# import pyperclip
 
 ascii_f = False
 B = Board()
@@ -30,21 +30,27 @@ while cmd not in ["q","quit","exit"]:
     print("Bienvenue dans le moteur d'echec de Corto et Hugo ! \n Tapez help pour les commandes... \n\n\n")
     if cmd == "help":
         print("redemarer une nouvelle partie -> restart")
-        print("jouer un coup -> (case de depart)(case d'arrivee)(promotion) (ex : e2e4 ou c2c1q)")
+        print("jouer un coup -> [depart][arrivee][promotion] (ex : e2e4 ou c2c1q)")
         print("annuler un coup -> undo")
-        print("jouer un coup d'ordinateur -> go")
+        print("jouer un coup d'ordinateur à la profondeur x -> go [x]")
         print("activer/desactiver l'affichage ASCII -> ascii")
         print("afficher la liste des coups jouables -> moves")
         print("charger un fen -> fen rnbqkbnr/ppp2ppp/4p3/3p4/Q1PP4/8/PP2PPPP/RNB1KBNR b KQkq - 1 3 (ex)")
         print("copier le fen -> cfen")
+        print("tester les performances à la profondeur x -> perf [x]")
     elif cmd == "restart":
         B.init()
     elif cmd == "ascii":
         ascii_f = not ascii_f
-    elif cmd == "go":
-        score,mv = E.bot_move(3, B)
+    elif "go" in cmd:
+        if cmd == "go":
+            depth = 4
+        else:
+            depth = int(cmd.split()[1])
+        
+        mv,score = E.bot_move(depth, B)
         coup = CASES[B.get_move_source(mv)]+CASES[B.get_move_target(mv)]
-        piece = B.get_move_piece(mv)
+        piece = PIECE_LETTER[B.get_move_piece(mv)]
         print("piece : {} \nmeilleur coup : {} \nscore : {}".format(piece,coup, score))
     elif cmd == "moves":
         B.print_move(B.side)
@@ -54,6 +60,9 @@ while cmd not in ["q","quit","exit"]:
         fen = str(cmd[4:])
         print(fen)
         B.set_fen(fen)
+    elif "perf" in cmd:
+        depth = int(cmd.split()[1])
+        B.perft_test(depth)
     elif cmd == "undo":
         B.undo_move(True)
     elif 4 <= len(cmd) <= 5:
