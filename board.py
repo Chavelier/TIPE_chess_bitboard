@@ -940,6 +940,21 @@ class Board:
     #### FONCTION D'EVALUATION ###############################################################
     ##########################################################################################
 
+    def naive_eval(self):
+        """ fonction d'évaluation naive pour le debug (ne prend que la valeur des pieces en compte)"""
+        val = 0
+        for piece in range(12):
+            bb = self.bitboard[piece]
+            while bb:
+                case = self.ls1b_index(bb)
+                bb = self.pop_bit(bb, case)
+                val += PIECE_VAL[piece]
+
+        if self.side == WHITE:
+            return val
+        else:
+            return -val
+
     def evaluation(self,absolute=True):
         """ Renvoi l'évaluation de la position actuelle
             absolute determine si on doit prendre la valeur opposée si ce sont les noirs qui jouent """

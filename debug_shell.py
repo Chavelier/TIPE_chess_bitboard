@@ -11,7 +11,8 @@ DEBUG SHELL
 
 from board import *
 from engine import *
-# import pyperclip
+import time
+import pyperclip
 
 ascii_f = False
 B = Board()
@@ -47,11 +48,14 @@ while cmd not in ["q","quit","exit"]:
             depth = 4
         else:
             depth = int(cmd.split()[1])
-        
+        tic = time.time()
         mv,score = E.bot_move(depth, B)
-        coup = CASES[B.get_move_source(mv)]+CASES[B.get_move_target(mv)]
-        piece = PIECE_LETTER[B.get_move_piece(mv)]
-        print("piece : {} \nmeilleur coup : {} \nscore : {}".format(piece,coup, score))
+        # coup = CASES[B.get_move_source(mv)]+CASES[B.get_move_target(mv)]
+        # piece = PIECE_LETTER[B.get_move_piece(mv)]
+        # print("piece : {} \nmeilleur coup : {} \nscore : {}".format(piece,coup, score))
+        print("score : %s"%score)
+        B.make_move(mv)
+        print("temps de calcul : %ss"%(time.time()-tic))
     elif cmd == "moves":
         B.print_move(B.side)
     elif cmd == "cfen":
