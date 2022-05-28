@@ -91,9 +91,9 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False,hi
 
 
     def play_sound(mv):
-        if B.get_move_capture(mv):
+        if mv.capture:
             sounds[2].play()
-        elif B.get_move_castling(mv):
+        elif mv.castling:
             sounds[3].play()
         elif B.square_is_attacked(B.ls1b_index(B.bitboard[K+B.side*6]),1-B.side):
             sounds[4].play()
@@ -177,8 +177,8 @@ def highlight_squares(screen,B,valid_moves,sq_selected):
 
     #On surligne sur les cases légales pour la pièce
     for move in valid_moves:
-        case_depart = B.get_move_source(move)
-        case_arrivee = B.get_move_target(move)
+        case_depart = move.source
+        case_arrivee = move.target
         start_row,start_col = case_depart//8,case_depart%8
         end_row,end_col = case_arrivee//8,case_arrivee%8
         if start_row == row and start_col == col:
@@ -220,7 +220,7 @@ def draw_pieces(screen,B):
 def animate_move(move,screen,B,clock,font): #C'est pas le plus opti mais oklm ça fonctionne que 1s
     """Anime l'échiquier et déplace la pièce"""
 
-    start_case,end_case = CASES[B.get_move_source(move)],CASES[B.get_move_target(move)]
+    start_case,end_case = CASES[move.source],CASES[move.target]
     start_col,end_col = filesToCols[start_case[0]],filesToCols[end_case[0]]
     start_row,end_row = 8-int(start_case[1]),8-int(end_case[1])
     dR,dC = end_row-start_row,end_col-start_col
@@ -240,7 +240,7 @@ def animate_move(move,screen,B,clock,font): #C'est pas le plus opti mais oklm ç
                 occ_case=True
         #if occ_case:
             #screen.blit(IMAGES[piecearrivee], end_square) TODO
-        screen.blit(IMAGES[PIECE_LETTER[B.get_move_piece(move)]], py.Rect(col*SQ_SIZE,row*SQ_SIZE, SQ_SIZE,SQ_SIZE))
+        screen.blit(IMAGES[PIECE_LETTER[move.piece]], py.Rect(col*SQ_SIZE,row*SQ_SIZE, SQ_SIZE,SQ_SIZE))
         py.display.flip()
         clock.tick(480)
 

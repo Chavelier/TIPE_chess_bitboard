@@ -18,7 +18,7 @@ class Engine:
 
     def __init__(self):
         self.ply = 0 # compteur de la profondeur (en demi coups)
-        self.killer_moves = [[0 for _ in range(MAX_PLY)],[0 for _ in range(MAX_PLY)]]
+        self.killer_moves = [[Move() for _ in range(MAX_PLY)],[Move() for _ in range(MAX_PLY)]]
         self.history_moves = [[0 for _ in range(64)] for _ in range(12)]
 
 
@@ -64,20 +64,20 @@ class Engine:
             board.undo_move(True)
 
             if score >= beta: # fail hard -> on coupe cette partie
-                if not board.get_move_capture(mv): # on n'enregistre seulement les coups discrets
+                if not mv.capture: # on n'enregistre seulement les coups discrets
                     self.killer_moves[1][self.ply] = self.killer_moves[0][self.ply] # on garde en mémoire l'ancien killer move
                     self.killer_moves[0][self.ply] = mv # on enregistre le killer move
 
                 return beta
 
             if score > alpha: #on a trouvé un meilleur coup
-                if not board.get_move_capture(mv): # on n'enregistre seulement les coups discrets
-                    self.history_moves[board.get_move_piece(mv)][board.get_move_target(mv)] += depth # enlève des noeuds mais pas l'impression que ça accélère
+                if not mv.capture: # on n'enregistre seulement les coups discrets
+                    self.history_moves[mv.piece][mv.target] += depth # enlève des noeuds mais pas l'impression que ça accélère
 
                 alpha = score
 
                 if self.ply == 0:
-                    # coup = CASES[board.get_move_source(mv)] + CASES[board.get_move_target(mv)] + PIECE_LETTER[board.get_move_promotion(mv)].lower()
+                    # coup = CASES[mv.source] + CASES[mv.target] + PIECE_LETTER[mv.promotion].lower()
                     # print("meilleur coup actuellement : %s \n"%coup)
                     # self.best_move = mv
                     best_sofar = mv # on associe comme meilleur coup de départ celui qui donne le meilleur score
@@ -119,9 +119,6 @@ class Engine:
         for mv in move_list:
             if not board.make_move(mv,True): #on ne regarde que les captures
                 continue # le coup n'est pas legal, on le passe donc
-            # if not board.get_move_capture(mv):
-            #     board.undo_move(True)
-            #     continue
             self.ply += 1
             score = -self.quiescence(-beta,-alpha,board)
             self.ply -=1
@@ -141,16 +138,16 @@ class Engine:
     def score_move(self,move,board):
         """ renvoi un score a un coup pour permettre de trier l'ordre des coups pour l'algorithme alpha-beta """
 
-        if not board.get_move_capture(move): # on attribue une valeur plus faible aux coups ne capturant rien
+        if not move.capture: # on attribue une valeur plus faible aux coups ne capturant rien
             if move == self.killer_moves[0][self.ply]:
                 return 9000
             if move == self.killer_moves[1][self.ply]:
                 return 8000
-            return self.history_moves[board.get_move_piece(move)][board.get_move_target(move)]
+            return self.history_moves[move.piece][move.target]
 
 
-        attaquant = board.get_move_piece(move)
-        target = board.get_move_target(move)
+        attaquant = move.piece
+        target = move.target
         offset = 6*(1^board.side)
         victime = P
         for piece in range(0+offset,6+offset):

@@ -12,6 +12,20 @@ BOARD
 from init import *
 import time
 
+class Move:
+    """ Représentation des coups """
+
+    def __init__(self,source=0,target=0,piece=NO_PIECE,promotion=NO_PIECE,capture=0,double=0,enpassant=0,castling=0):
+        self.source = source
+        self.target = target
+        self.piece = piece
+        self.promotion = promotion
+        self.capture = capture
+        self.double = double
+        self.enpassant = enpassant
+        self.castling = castling
+
+
 class Board:
     """ Représentation de l'échéquier """
 
@@ -288,31 +302,31 @@ class Board:
     def move_to_pgn(self,move,valid_moves):
         "Prend en entrée un coup et renvoie sa traduction en PGN. Ex : Qxe5+"
 
-        if self.get_move_castling(move):
-            if self.get_move_target(move) == G1 or self.get_move_target(move) == G8:
+        if move.castling:
+            if move.target == G1 or move.target == G8:
                 return "O-O"
             else: return "O-O-O"
 
         txt = ''
-        piece = self.get_move_piece(move)
-        case_arrivee = self.get_move_target(move)
-        case_depart = self.get_move_source(move)
+        piece = move.piece
+        case_arrivee = move.target
+        case_depart = move.source
 
         if piece == p or piece == P:
-            if self.get_move_capture(move):
+            if move.capture:
                 txt += CASES[case_depart][0] + 'x'
         else:
             txt += PIECE_LETTER[piece].upper()
             l,temp = valid_moves,''
             for move_temp in l:
-                if self.get_move_target(move_temp) == case_arrivee and (move_temp != move):
-                    if self.get_move_piece(move_temp) == piece:
-                        case_depart_temp = self.get_move_source(move_temp)
+                if move_temp.target == case_arrivee and (move_temp != move):
+                    if move_temp.piece == piece:
+                        case_depart_temp = move_temp.source
                         if case_depart_temp//8 == case_depart//8:
                             temp += CASES[case_depart][1]
                         else:
                             temp += CASES[case_depart][0]
-            if self.get_move_capture(move):
+            if move.capture:
                 temp = 'x' + temp
             txt += temp
 
@@ -583,46 +597,6 @@ class Board:
     # // GENERATION DES COUPS // #########################################################
     ######################################################################################
 
-    #### ENCODAGE DES COUPS ############################################################################
-    # 0000 0000 0000 0000 0011 1111   case de depart  0x3f
-    # 0000 0000 0000 1111 1100 0000   case d'arrivee  0xfc0
-    # 0000 0000 1111 0000 0000 0000   piece jouee  0xf000
-    # 0000 1111 0000 0000 0000 0000   promotion  0xf0000
-    # 0001 0000 0000 0000 0000 0000   capture flag  0x100000
-    # 0010 0000 0000 0000 0000 0000   double push flag  0x200000
-    # 0100 0000 0000 0000 0000 0000   en passant flag  0x300000
-    # 1000 0000 0000 0000 0000 0000   castling flag  0x400000
-    ####################################################################################################
-
-    @staticmethod
-    def encode_move(source,target,piece,promotion,capture,double,enpassant,castling):
-        return source | (target << 6) | (piece << 12) | (promotion << 16) | (capture << 20) | (double << 21) | (enpassant << 22) | (castling << 23)
-    @staticmethod
-    def get_move_source(move):
-        return move & 0x3f
-    @staticmethod
-    def get_move_target(move):
-        return (move & 0xfc0) >> 6
-    @staticmethod
-    def get_move_piece(move):
-        return (move & 0xf000) >> 12
-    @staticmethod
-    def get_move_promotion(move):
-        return (move & 0xf0000) >> 16
-    @staticmethod
-    def get_move_capture(move):
-        return (move & (1<<20)) != 0
-    @staticmethod
-    def get_move_double(move):
-        return (move & (1<<21)) != 0
-    @staticmethod
-    def get_move_enpassant(move):
-        return (move & (1<<22)) != 0
-    @staticmethod
-    def get_move_castling(move):
-        return (move & (1<<23)) != 0
-
-
     def move_generation(self,side):
         """ génère les coups pseudo légaux possibles du côté donné en argument """
 
@@ -633,20 +607,20 @@ class Board:
             if self.castle_right & 1: # king castling
                 if not (self.occupancies[2] & (2**F1 + 2**G1)):
                     if (not self.square_is_attacked(E1, BLACK)) and (not self.square_is_attacked(F1, BLACK)):
-                        move_list.append(self.encode_move(E1, G1, K, NO_PIECE, 0, 0, 0, 1))
+                        move_list.append(Move(E1, G1, K, NO_PIECE, 0, 0, 0, 1))
             if self.castle_right & 2: # queen castling
                 if not (self.occupancies[2] & (2**D1 + 2**C1 + 2**B1)):
                     if (not self.square_is_attacked(E1, BLACK)) and (not self.square_is_attacked(D1, BLACK)):
-                        move_list.append(self.encode_move(E1, C1, K, NO_PIECE, 0, 0, 0, 1))
+                        move_list.append(Move(E1, C1, K, NO_PIECE, 0, 0, 0, 1))
         else:
             if self.castle_right & 4: # king castling
                 if not (self.occupancies[2] & (2**F8 + 2**G8)):
                     if (not self.square_is_attacked(E8, WHITE)) and (not self.square_is_attacked(F8, WHITE)):
-                        move_list.append(self.encode_move(E8, G8, k, NO_PIECE, 0, 0, 0, 1))
+                        move_list.append(Move(E8, G8, k, NO_PIECE, 0, 0, 0, 1))
             if self.castle_right & 8: # queen castling
                 if not (self.occupancies[2] & (2**D8 + 2**C8 + 2**B8)):
                     if (not self.square_is_attacked(E8, WHITE)) and (not self.square_is_attacked(D8, WHITE)):
-                        move_list.append(self.encode_move(E8, C8, k, NO_PIECE, 0, 0, 0, 1))
+                        move_list.append(Move(E8, C8, k, NO_PIECE, 0, 0, 0, 1))
 
         for piece in range(side*6,(side+1)*6): # on selectionne la bonne partie de bitboard en fonction du side
             bb = self.bitboard[piece]
@@ -661,17 +635,17 @@ class Board:
                     while is_attacking:
                         arrivee = self.ls1b_index(is_attacking)
                         if arrivee <= H8: #on mange et on promotionne
-                            move_list.insert(0,self.encode_move(depart, arrivee, P, Q, 1, 0, 0, 0))
-                            move_list.insert(0,self.encode_move(depart, arrivee, P, R, 1, 0, 0, 0))
-                            move_list.insert(0,self.encode_move(depart, arrivee, P, B, 1, 0, 0, 0))
-                            move_list.insert(0,self.encode_move(depart, arrivee, P, N, 1, 0, 0, 0))
+                            move_list.insert(0,Move(depart, arrivee, P, Q, 1, 0, 0, 0))
+                            move_list.insert(0,Move(depart, arrivee, P, R, 1, 0, 0, 0))
+                            move_list.insert(0,Move(depart, arrivee, P, B, 1, 0, 0, 0))
+                            move_list.insert(0,Move(depart, arrivee, P, N, 1, 0, 0, 0))
                         else:
-                            move_list.insert(0,self.encode_move(depart,arrivee,P,NO_PIECE,1,0,0,0))
+                            move_list.insert(0,Move(depart,arrivee,P,NO_PIECE,1,0,0,0))
                         is_attacking = self.pop_bit(is_attacking, arrivee)
 
                     # prise en passant
                     if self.en_passant != -1 and (self.pawn_attack[0][depart] & (1<<self.en_passant)):
-                        move_list.insert(0,self.encode_move(depart, self.en_passant, P, NO_PIECE, 1, 0, 1, 0))
+                        move_list.insert(0,Move(depart, self.en_passant, P, NO_PIECE, 1, 0, 1, 0))
 
                     # coup de pion blanc discret
                     arrivee = depart - 8
@@ -679,15 +653,15 @@ class Board:
 
                         #promotion
                         if arrivee <= H8: #le pion arrive sur la dernière rangée
-                            move_list.append(self.encode_move(depart,arrivee,P,Q,0,0,0,0))
-                            move_list.append(self.encode_move(depart,arrivee,P,R,0,0,0,0))
-                            move_list.append(self.encode_move(depart,arrivee,P,B,0,0,0,0))
-                            move_list.append(self.encode_move(depart,arrivee,P,N,0,0,0,0))
+                            move_list.append(Move(depart,arrivee,P,Q,0,0,0,0))
+                            move_list.append(Move(depart,arrivee,P,R,0,0,0,0))
+                            move_list.append(Move(depart,arrivee,P,B,0,0,0,0))
+                            move_list.append(Move(depart,arrivee,P,N,0,0,0,0))
                         else:
                             # avancée de 2 cases
                             if (A2 <= depart <= H2) and not self.get_bit(self.occupancies[2],arrivee-8):
-                                move_list.append(self.encode_move(depart,arrivee-8,P,NO_PIECE,0,1,0,0))
-                            move_list.append(self.encode_move(depart,arrivee,P,NO_PIECE,0,0,0,0))
+                                move_list.append(Move(depart,arrivee-8,P,NO_PIECE,0,1,0,0))
+                            move_list.append(Move(depart,arrivee,P,NO_PIECE,0,0,0,0))
             elif piece == p : # pion noir
                 while bb:
                     depart = self.ls1b_index(bb)
@@ -698,17 +672,17 @@ class Board:
                     while is_attacking:
                         arrivee = self.ls1b_index(is_attacking)
                         if arrivee >= A1: #on mange et on promotionne
-                            move_list.insert(0,self.encode_move(depart, arrivee, p, q, 1, 0, 0, 0))
-                            move_list.insert(0,self.encode_move(depart, arrivee, p, r, 1, 0, 0, 0))
-                            move_list.insert(0,self.encode_move(depart, arrivee, p, b, 1, 0, 0, 0))
-                            move_list.insert(0,self.encode_move(depart, arrivee, p, n, 1, 0, 0, 0))
+                            move_list.insert(0,Move(depart, arrivee, p, q, 1, 0, 0, 0))
+                            move_list.insert(0,Move(depart, arrivee, p, r, 1, 0, 0, 0))
+                            move_list.insert(0,Move(depart, arrivee, p, b, 1, 0, 0, 0))
+                            move_list.insert(0,Move(depart, arrivee, p, n, 1, 0, 0, 0))
                         else:
-                            move_list.insert(0,self.encode_move(depart, arrivee, p, NO_PIECE, 1, 0, 0, 0))
+                            move_list.insert(0,Move(depart, arrivee, p, NO_PIECE, 1, 0, 0, 0))
 
                         is_attacking = self.pop_bit(is_attacking, arrivee)
                     # prise en passant
                     if self.en_passant != -1 and (self.pawn_attack[1][depart] & (1<<self.en_passant)):
-                        move_list.insert(0,self.encode_move(depart, self.en_passant, p, NO_PIECE, 1, 0, 1, 0))
+                        move_list.insert(0,Move(depart, self.en_passant, p, NO_PIECE, 1, 0, 1, 0))
 
                     # coup de pion noir discret
                     arrivee = depart + 8 # + pour noir - pour blanc
@@ -716,15 +690,15 @@ class Board:
 
                         #promotion
                         if arrivee >= A1: #le pion arrive sur la dernière rangée
-                            move_list.append(self.encode_move(depart,arrivee,p,q,0,0,0,0))
-                            move_list.append(self.encode_move(depart,arrivee,p,r,0,0,0,0))
-                            move_list.append(self.encode_move(depart,arrivee,p,b,0,0,0,0))
-                            move_list.append(self.encode_move(depart,arrivee,p,n,0,0,0,0))
+                            move_list.append(Move(depart,arrivee,p,q,0,0,0,0))
+                            move_list.append(Move(depart,arrivee,p,r,0,0,0,0))
+                            move_list.append(Move(depart,arrivee,p,b,0,0,0,0))
+                            move_list.append(Move(depart,arrivee,p,n,0,0,0,0))
                         else:
                             # avancée de 2 cases
                             if (A7 <= depart <= H7) and not self.get_bit(self.occupancies[2],arrivee+8):
-                                move_list.append(self.encode_move(depart,arrivee+8,p,NO_PIECE,0,1,0,0))
-                            move_list.append(self.encode_move(depart,arrivee,p,NO_PIECE,0,0,0,0))
+                                move_list.append(Move(depart,arrivee+8,p,NO_PIECE,0,1,0,0))
+                            move_list.append(Move(depart,arrivee,p,NO_PIECE,0,0,0,0))
             else: #autres pièces
                 while bb:
                     depart = self.ls1b_index(bb)
@@ -743,9 +717,9 @@ class Board:
                         arrivee = self.ls1b_index(attack_map)
                         attack_map = self.pop_bit(attack_map, arrivee)
                         if self.get_bit(self.occupancies[2], arrivee): # il y a une prise
-                            move_list.insert(0,self.encode_move(depart, arrivee, piece, NO_PIECE, 1, 0, 0, 0)) #on met les captures au début de la liste
+                            move_list.insert(0,Move(depart, arrivee, piece, NO_PIECE, 1, 0, 0, 0)) #on met les captures au début de la liste
                         else:
-                            move_list.append(self.encode_move(depart, arrivee, piece, NO_PIECE, 0, 0, 0, 0))
+                            move_list.append(Move(depart, arrivee, piece, NO_PIECE, 0, 0, 0, 0))
 
 
         return move_list
@@ -770,12 +744,12 @@ class Board:
         print("Coup   Piece  Capture  Double  Enpassant  Roque")
         print()
         for move in liste:
-            coup = CASES[self.get_move_source(move)] + CASES[self.get_move_target(move)] + PIECE_LETTER[self.get_move_promotion(move)].lower()
-            piece = PIECE_LETTER[self.get_move_piece(move)]
-            capt = int(self.get_move_capture(move))
-            double = int(self.get_move_double(move))
-            enpass = int(self.get_move_enpassant(move))
-            roque = int(self.get_move_castling(move))
+            coup = CASES[move.source] + CASES[move.target] + PIECE_LETTER[move.promotion].lower()
+            piece = PIECE_LETTER[move.piece]
+            capt = int(move.capture)
+            double = int(move.double)
+            enpass = int(move.enpassant)
+            roque = int(move.castling)
             print("{0}  {1}      {2}        {3}       {4}          {5}".format(coup,piece,capt,double,enpass,roque))
         print("\nNombre de coup : %s"%len(liste))
 
@@ -814,18 +788,18 @@ class Board:
     def make_move(self, move, only_capture_flag=False):
         """ fait le coup et l'ajoute à l'historique """
 
-        if only_capture_flag and not self.get_move_capture(move):
+        if only_capture_flag and not move.capture:
             return 0 # on ne fait pas le coup
 
         # on récupère les informations du coup
-        source = self.get_move_source(move)
-        target = self.get_move_target(move)
-        piece = self.get_move_piece(move)
-        promote = self.get_move_promotion(move)
-        capture = self.get_move_capture(move)
-        double = self.get_move_double(move)
-        enpass = self.get_move_enpassant(move)
-        roque = self.get_move_castling(move)
+        source = move.source
+        target = move.target
+        piece = move.piece
+        promote = move.promotion
+        capture = move.capture
+        double = move.double
+        enpass = move.enpassant
+        roque = move.castling
 
         # on déplace la pièce
         self.bitboard[piece] = self.pop_bit(self.bitboard[piece], source)
@@ -984,7 +958,7 @@ class Board:
         else:
             promotion = PIECE_LETTER.index(prom.lower())
         for move in move_list:
-            if source == self.get_move_source(move) and target == self.get_move_target(move) and promotion == self.get_move_promotion(move):
+            if source == move.source and target == move.target and promotion == move.promotion:
                 return move
         # le coup est incorrect ou laisse le roi en echec
         return -1

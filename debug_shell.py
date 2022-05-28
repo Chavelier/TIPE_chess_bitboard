@@ -59,7 +59,7 @@ while cmd not in ["q","quit","exit"]:
         print("Profondeur maximale atteinte : %s"%max_depth)
         board.make_move(mv)
         print("Temps de calcul : %ss"%(time.time()-tic))
-        print("\ncoup joué : %s"%(PIECE_LETTER[board.get_move_piece(mv)]+" "+CASES[board.get_move_source(mv)]+CASES[board.get_move_target(mv)]))
+        print("\ncoup joué : %s"%(PIECE_LETTER[mv.piece]+" "+CASES[mv.source]+CASES[mv.target]))
     elif cmd == "moves":
         board.print_move(board.side)
     elif cmd == "cfen":
