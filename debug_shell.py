@@ -9,13 +9,12 @@ Created on Tue Mar  8 14:20:06 2022
 DEBUG SHELL
 """
 
-from board import *
 from engine import *
 import time
 import pyperclip
 
 ascii_f = False
-B = Board()
+board = Board()
 E = Engine()
 
 
@@ -40,7 +39,9 @@ while cmd not in ["q","quit","exit"]:
         print("copier le fen -> cfen")
         print("tester les performances à la profondeur x -> perf [x]")
     elif cmd == "restart":
-        B.init()
+        board.init()
+    elif cmd == "debug":
+        board.add_to_history()
     elif cmd == "ascii":
         ascii_f = not ascii_f
     elif "go" in cmd:
@@ -49,34 +50,38 @@ while cmd not in ["q","quit","exit"]:
         else:
             depth = int(cmd.split()[1])
         tic = time.time()
-        mv,score = E.bot_move(depth, B)
+        mv,score,nodes,max_depth = E.bot_move(depth, board)
         # coup = CASES[B.get_move_source(mv)]+CASES[B.get_move_target(mv)]
         # piece = PIECE_LETTER[B.get_move_piece(mv)]
         # print("piece : {} \nmeilleur coup : {} \nscore : {}".format(piece,coup, score))
-        print("score : %s"%score)
-        B.make_move(mv)
-        print("temps de calcul : %ss"%(time.time()-tic))
+        print("Score calculé : %s"%score)
+        print("Noeuds visités : %s"%nodes)
+        print("Profondeur maximale atteinte : %s"%max_depth)
+        board.make_move(mv)
+        print("Temps de calcul : %ss"%(time.time()-tic))
+        print("\ncoup joué : %s"%(PIECE_LETTER[board.get_move_piece(mv)]+" "+CASES[board.get_move_source(mv)]+CASES[board.get_move_target(mv)]))
     elif cmd == "moves":
-        B.print_move(B.side)
+        board.print_move(board.side)
     elif cmd == "cfen":
-        pyperclip.copy(B.get_fen())
+        pyperclip.copy(board.get_fen())
     elif  cmd[0:4] == "fen ":
         fen = str(cmd[4:])
         print(fen)
-        B.set_fen(fen)
+        board.set_fen(fen)
     elif "perf" in cmd:
         depth = int(cmd.split()[1])
-        B.perft_test(depth)
+        board.perft_test(depth)
     elif cmd == "undo":
-        B.undo_move(True)
+        board.undo_move(True)
     elif 4 <= len(cmd) <= 5:
         coup = cmd
         if len(cmd) == 4:
             coup += " "
-        mv = B.trad_move(coup)
+        mv = board.trad_move(coup)
         if mv != -1:
-            B.make_move(mv)
+            print(board.score_move(mv))
+            board.make_move(mv)
 
 
-    B.print_board(ascii_f)
+    board.print_board(ascii_f)
     cmd = input("\n>>> ")

@@ -13,7 +13,7 @@ from init import *
 import time
 
 class Board:
-    """ classe qui gère tout l'échéquier """
+    """ Représentation de l'échéquier """
 
     def __init__(self):
         self.init()
@@ -23,19 +23,19 @@ class Board:
 
         self.side = WHITE
 
-        self.bitboard = [
+        self.bitboard = [ # P N B R Q K p n b r q k
             71776119061217280,
-            2**60,
-            2**59,
-            2**58+2**61,
             2**57+2**62,
+            2**58+2**61,
             2**56+2**63,
+            2**59,
+            2**60,
             65280,
-            2**4,
-            2**3,
-            2**2+2**5,
             2**1+2**6,
-            2**0+2**7
+            2**2+2**5,
+            2**0+2**7,
+            2**3,
+            2**4
             ]
         self.occupancies = [0,0,0]
         for i in range(6):
@@ -157,7 +157,8 @@ class Board:
         if self.en_passant != -1:
             print("En passant : %s"%CASES[self.en_passant])
         print("Droits au roque : %s"%bin(self.castle_right)[2:])
-        print("Evaluation côté blanc : %s"%self.evaluation())
+        print("Evaluation côté blanc (en centipions) : %s"%self.evaluation())
+        print("Historique schéma : %s"%self.history_debug())
 
     def is_occupancies_correct(self):
         occ0 = 0
@@ -375,14 +376,14 @@ class Board:
     def get_bishop_attack(self,case,occ,):
         """ renvoi un bitboard de l'attaque du fou en fonction de l'occupance de l'échéquier """
         if self.usemagic:
-            bb = (((occ & self.bishop_mask[case]) * self.bishop_magic_numbers[case])&ALL) >> (64-BISHOP_RELEVANT_BITS[case])
-            return self.bishop_attacks[case][bb]
+            id = (((occ & self.bishop_mask[case]) * self.bishop_magic_numbers[case])&ALL) >> (64-BISHOP_RELEVANT_BITS[case])
+            return self.bishop_attacks[case][id]
         return self.bishop_attack_on_the_fly(case, occ) # on n'utilise pas le magic bitboard dans ce cas là (peut être utile pour debug)
     def get_rook_attack(self,case,occ):
         """ renvoi un bitboard de l'attaque de la tour en fonction de l'occupance de l'échéquier """
         if self.usemagic:
-            bb = (((occ & self.rook_mask[case]) * self.rook_magic_numbers[case])&ALL) >> (64-ROOK_RELEVANT_BITS[case])
-            return self.rook_attacks[case][bb]
+            id = (((occ & self.rook_mask[case]) * self.rook_magic_numbers[case])&ALL) >> (64-ROOK_RELEVANT_BITS[case])
+            return self.rook_attacks[case][id]
         return self.rook_attack_on_the_fly(case, occ) # on n'utilise pas le magic bitboard dans ce cas là (peut être utile pour debug)
     def get_queen_attack(self,case,occ):
         return self.get_bishop_attack(case, occ) | self.get_rook_attack(case, occ)
@@ -784,7 +785,20 @@ class Board:
     ############################################################################################################################################
 
     def add_to_history(self):
+        """ ajoute la position actuelle à l'historique """
         self.history.append((self.bitboard[:], self.occupancies[:], self.side, self.en_passant, self.castle_right))
+
+    def history_debug(self):
+        L = []
+        id = -1
+        last_pos = ([],[],0,0,0)
+        for pos in self.history:
+            # print(pos)
+            if pos != last_pos:
+                id += 1
+                last_pos = pos
+            L.append(id)
+        return L
 
     def undo_move(self, real_move):
         """ annule le dernier coup, si real_move = True alors on supprime d'abord la dernière entrée de l'historique sinon non """
@@ -800,140 +814,117 @@ class Board:
     def make_move(self, move, only_capture_flag=False):
         """ fait le coup et l'ajoute à l'historique """
 
-        if only_capture_flag:
-            if self.get_move_capture(move):
-                self.make_move(move,False)
-            else:
-                return 0 # on ne fait pas le coup
+        if only_capture_flag and not self.get_move_capture(move):
+            return 0 # on ne fait pas le coup
+
+        # on récupère les informations du coup
+        source = self.get_move_source(move)
+        target = self.get_move_target(move)
+        piece = self.get_move_piece(move)
+        promote = self.get_move_promotion(move)
+        capture = self.get_move_capture(move)
+        double = self.get_move_double(move)
+        enpass = self.get_move_enpassant(move)
+        roque = self.get_move_castling(move)
+
+        # on déplace la pièce
+        self.bitboard[piece] = self.pop_bit(self.bitboard[piece], source)
+
+        if promote != NO_PIECE: # si il y a une promotion
+            self.bitboard[promote] = self.set_bit(self.bitboard[promote], target)
         else:
-            # on récupère les informations du coup
-            source = self.get_move_source(move)
-            target = self.get_move_target(move)
-            piece = self.get_move_piece(move)
-            promote = self.get_move_promotion(move)
-            capture = self.get_move_capture(move)
-            double = self.get_move_double(move)
-            enpass = self.get_move_enpassant(move)
-            roque = self.get_move_castling(move)
+            self.bitboard[piece] = self.set_bit(self.bitboard[piece], target)
 
-            # on déplace la pièce
-            self.bitboard[piece] = self.pop_bit(self.bitboard[piece], source)
+        self.occupancies[self.side] = self.pop_bit(self.occupancies[self.side], source)
+        self.occupancies[self.side] = self.set_bit(self.occupancies[self.side], target)
+        self.occupancies[2] = self.pop_bit(self.occupancies[2], source) # quel que soit le coup il n'y aura plus de piece sur la case d'origine
 
-            if promote != NO_PIECE: # si il y a une promotion
-                self.bitboard[promote] = self.set_bit(self.bitboard[promote], target)
+        # on gère les captures
+        if enpass: # cas particulier : prise en passant
+            if self.side == WHITE:
+                self.bitboard[p] = self.pop_bit(self.bitboard[p], target+8)
+                self.occupancies[1] = self.pop_bit(self.occupancies[1], target+8) # on retire la piece de l'occupance global de la couleur attaquée
+                self.occupancies[2] = self.pop_bit(self.occupancies[2], target+8)
+                self.occupancies[2] = self.set_bit(self.occupancies[2], target)
             else:
-                self.bitboard[piece] = self.set_bit(self.bitboard[piece], target)
+                self.bitboard[P] = self.pop_bit(self.bitboard[P], target-8)
+                self.occupancies[0] = self.pop_bit(self.occupancies[0], target-8) # on retire la piece de l'occupance global de la couleur attaquée
+                self.occupancies[2] = self.pop_bit(self.occupancies[2], target-8)
+                self.occupancies[2] = self.set_bit(self.occupancies[2], target)
 
-            self.occupancies[self.side] = self.pop_bit(self.occupancies[self.side], source)
-            self.occupancies[self.side] = self.set_bit(self.occupancies[self.side], target)
-            self.occupancies[2] = self.pop_bit(self.occupancies[2], source) # quel que soit le coup il n'y aura plus de piece sur la case d'origine
+        if capture:
+            self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target) # on retire la piece de l'occupance global de la couleur attaquée
 
-            # on gère les captures
-            if enpass: # cas particulier : prise en passant
-                if self.side == WHITE:
-                    self.bitboard[p] = self.pop_bit(self.bitboard[p], target+8)
-                    self.occupancies[1] = self.pop_bit(self.occupancies[1], target+8) # on retire la piece de l'occupance global de la couleur attaquée
-                    self.occupancies[2] = self.pop_bit(self.occupancies[2], target+8)
-                    self.occupancies[2] = self.set_bit(self.occupancies[2], target)
-                else:
-                    self.bitboard[P] = self.pop_bit(self.bitboard[P], target-8)
-                    self.occupancies[0] = self.pop_bit(self.occupancies[0], target-8) # on retire la piece de l'occupance global de la couleur attaquée
-                    self.occupancies[2] = self.pop_bit(self.occupancies[2], target-8)
-                    self.occupancies[2] = self.set_bit(self.occupancies[2], target)
+            for i in range((1-self.side)*6,(2-self.side)*6): # on parcours les pieces de la couleur adverse
+                if self.get_bit(self.bitboard[i], target):
+                    self.bitboard[i] = self.pop_bit(self.bitboard[i], target)
+                    break
+        else:
+            self.occupancies[2] = self.set_bit(self.occupancies[2], target) # il n'y avait pas de piece avant donc on doit l'ajouter
 
-            if capture:
-                self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target) # on retire la piece de l'occupance global de la couleur attaquée
+        if double: # on défini la nouvelle case de en passant
+            self.en_passant = source + (-1 + 2*self.side)*8
+        else:
+            self.en_passant = -1
 
-                for i in range((1-self.side)*6,(2-self.side)*6): # on parcours les pieces de la couleur adverse
-                    if self.get_bit(self.bitboard[i], target):
-                        self.bitboard[i] = self.pop_bit(self.bitboard[i], target)
-                        break
-            else:
-                self.occupancies[2] = self.set_bit(self.occupancies[2], target) # il n'y avait pas de piece avant donc on doit l'ajouter
-
-            if double: # on défini la nouvelle case de en passant
-                self.en_passant = source + (-1 + 2*self.side)*8
-            else:
-                self.en_passant = -1
-
-            if roque: # on doit deplacer la tour et enlever le droit au roque
-                if target == G1:
-                    self.bitboard[R] = self.set_bit(self.bitboard[R], F1)
-                    self.bitboard[R] = self.pop_bit(self.bitboard[R], H1)
-                    self.occupancies[0] = self.set_bit(self.occupancies[0], F1)
-                    self.occupancies[0] = self.pop_bit(self.occupancies[0], H1)
-                    self.occupancies[2] = self.set_bit(self.occupancies[2], F1)
-                    self.occupancies[2] = self.pop_bit(self.occupancies[2], H1)
-                    self.castle_right &= 0b1100
-                elif target == C1:
-                    self.bitboard[R] = self.set_bit(self.bitboard[R], D1)
-                    self.bitboard[R] = self.pop_bit(self.bitboard[R], A1)
-                    self.occupancies[0] = self.set_bit(self.occupancies[0], D1)
-                    self.occupancies[0] = self.pop_bit(self.occupancies[0], A1)
-                    self.occupancies[2] = self.set_bit(self.occupancies[2], D1)
-                    self.occupancies[2] = self.pop_bit(self.occupancies[2], A1)
-                    self.castle_right &= 0b1100
-                elif target == G8:
-                    self.bitboard[r] = self.set_bit(self.bitboard[r], F8)
-                    self.bitboard[r] = self.pop_bit(self.bitboard[r], H8)
-                    self.occupancies[1] = self.set_bit(self.occupancies[0], F8)
-                    self.occupancies[1] = self.pop_bit(self.occupancies[0], H8)
-                    self.occupancies[2] = self.set_bit(self.occupancies[2], F8)
-                    self.occupancies[2] = self.pop_bit(self.occupancies[2], H8)
-                    self.castle_right &= 0b0011
-                else:
-                    self.bitboard[r] = self.set_bit(self.bitboard[r], D8)
-                    self.bitboard[r] = self.pop_bit(self.bitboard[r], A8)
-                    self.occupancies[1] = self.set_bit(self.occupancies[1], D8)
-                    self.occupancies[1] = self.pop_bit(self.occupancies[1], A8)
-                    self.occupancies[2] = self.set_bit(self.occupancies[2], D8)
-                    self.occupancies[2] = self.pop_bit(self.occupancies[2], A8)
-                    self.castle_right &= 0b0011
-            elif piece == K:
+        if roque: # on doit deplacer la tour et enlever le droit au roque
+            if target == G1:
+                self.bitboard[R] = self.set_bit(self.bitboard[R], F1)
+                self.bitboard[R] = self.pop_bit(self.bitboard[R], H1)
+                self.occupancies[0] = self.set_bit(self.occupancies[0], F1)
+                self.occupancies[0] = self.pop_bit(self.occupancies[0], H1)
+                self.occupancies[2] = self.set_bit(self.occupancies[2], F1)
+                self.occupancies[2] = self.pop_bit(self.occupancies[2], H1)
                 self.castle_right &= 0b1100
-            elif piece == k:
+            elif target == C1:
+                self.bitboard[R] = self.set_bit(self.bitboard[R], D1)
+                self.bitboard[R] = self.pop_bit(self.bitboard[R], A1)
+                self.occupancies[0] = self.set_bit(self.occupancies[0], D1)
+                self.occupancies[0] = self.pop_bit(self.occupancies[0], A1)
+                self.occupancies[2] = self.set_bit(self.occupancies[2], D1)
+                self.occupancies[2] = self.pop_bit(self.occupancies[2], A1)
+                self.castle_right &= 0b1100
+            elif target == G8:
+                self.bitboard[r] = self.set_bit(self.bitboard[r], F8)
+                self.bitboard[r] = self.pop_bit(self.bitboard[r], H8)
+                self.occupancies[1] = self.set_bit(self.occupancies[0], F8)
+                self.occupancies[1] = self.pop_bit(self.occupancies[0], H8)
+                self.occupancies[2] = self.set_bit(self.occupancies[2], F8)
+                self.occupancies[2] = self.pop_bit(self.occupancies[2], H8)
                 self.castle_right &= 0b0011
+            else:
+                self.bitboard[r] = self.set_bit(self.bitboard[r], D8)
+                self.bitboard[r] = self.pop_bit(self.bitboard[r], A8)
+                self.occupancies[1] = self.set_bit(self.occupancies[1], D8)
+                self.occupancies[1] = self.pop_bit(self.occupancies[1], A8)
+                self.occupancies[2] = self.set_bit(self.occupancies[2], D8)
+                self.occupancies[2] = self.pop_bit(self.occupancies[2], A8)
+                self.castle_right &= 0b0011
+        elif piece == K:
+            self.castle_right &= 0b1100
+        elif piece == k:
+            self.castle_right &= 0b0011
 
-            # on update les droits aux roques si une tour bouge ou si elle est capturée
-            if (piece == R and source == H1) or target == H1:
-                self.castle_right &= 0b1110
-            elif (piece == R and source == A1) or target == A1:
-                self.castle_right &= 0b1101
-            elif (piece == r and source == H8) or target == H8:
-                self.castle_right &= 0b1011
-            elif (piece == r and source == A8) or target == A8:
-                self.castle_right &= 0b0111
+        # on update les droits aux roques si une tour bouge ou si elle est capturée
+        if (piece == R and source == H1) or target == H1:
+            self.castle_right &= 0b1110
+        elif (piece == R and source == A1) or target == A1:
+            self.castle_right &= 0b1101
+        elif (piece == r and source == H8) or target == H8:
+            self.castle_right &= 0b1011
+        elif (piece == r and source == A8) or target == A8:
+            self.castle_right &= 0b0111
 
-            #on vérifie si le roi n'est pas en échec
-            if self.square_is_attacked(self.ls1b_index(self.bitboard[K+6*self.side]), 1-self.side):
-                self.undo_move(False)
-                return 0 # le coup est legal
+        #on vérifie si le roi n'est pas en échec
+        if self.square_is_attacked(self.ls1b_index(self.bitboard[K+6*self.side]), 1^self.side):
+            self.undo_move(False)
+            return 0 # le coup est legal
 
-            # on finalise le coup
-            self.side ^= 1 # on change de coté
-            self.add_to_history()
-            return 1 # le coup est legal
+        # on finalise le coup
+        self.side ^= 1 # on change de coté
+        self.add_to_history()
+        return 1 # le coup est legal
 
-    def evaluation(self,absolute=True):
-        """ Renvoi l'évaluation de la position actuelle
-            absolute determine si on doit prendre la valeur opposée si ce sont les noirs qui jouent """
-
-        val = 0
-        for piece in range(12):
-            bb = self.bitboard[piece]
-            while bb:
-                case = self.ls1b_index(bb)
-                bb = self.pop_bit(bb, case)
-                val += PIECE_VAL[piece]
-                if piece < 6: # piece blanche
-                    val += POS_SCORE[piece][case]
-                else:
-                    val -= POS_SCORE[piece-6][MIRROR_CASE[case]]
-
-        if absolute or self.side == WHITE:
-            return val
-        else:
-            return -val
 
 
     ##########################################################################################
@@ -975,8 +966,6 @@ class Board:
             return val
         else:
             return -val
-
-
 
 
     ############################################################################

@@ -86,13 +86,13 @@ ROOK_RELEVANT_BITS = [
     12, 11, 11, 11, 11, 11, 11, 12
 ]
 
-[P,K,Q,B,N,R,p,k,q,b,n,r] = range(12)
+[P,N,B,R,Q,K,p,n,b,r,q,k] = range(12)
 NO_PIECE = 12 # utile pour l'encodage des coups
-PIECE_LETTER = "PKQBNRpkqbnr "
+PIECE_LETTER = "PNBRQKpnbrqk "
 PIECE_ASCII = { p : "♙", k : "♔", q : "♕", n : "♘", b : "♗", r : "♖",
                    P : "♟︎", K : "♚", Q : "♛", N : "♞", B : "♝", R : "♜"}
-PIECE_LETTER_IMAGES = ["wp",'wK','wQ','wB','wN','wR','bp','bK','bQ','bB','bN','bR']
-PIECE_VAL = [100, 0, 900, 300, 300, 500, -100, 0, -900, -300, -300, -500]
+PIECE_LETTER_IMAGES = ["wp",'wN','wB','wR','wQ','wK','bp','bN','bB','bR','bQ','bK']
+PIECE_VAL = [100,300,300,500,900,0,-100,-300,-300,-500,-900,0]
 
 PAWN_POS_SCORE = [
     90,  90,  90,  90,  90,  90,  90,  90,
@@ -160,6 +160,38 @@ MIRROR_CASE = [
 	A8, B8, C8, D8, E8, F8, G8, H8 ]
 
 
+"""
+   (Victims) Pawn Knight Bishop   Rook  Queen   King
+ (Attackers)
+       Pawn   105    205    305    405    505    605
+     Knight   104    204    304    404    504    604
+     Bishop   103    203    303    403    503    603
+       Rook   102    202    302    402    502    602
+      Queen   101    201    301    401    501    601
+       King   100    200    300    400    500    600
+      """
+
+MVV_LVA = [ # matrice pour classer les captures en fonction de leur ordre d'importance ([attaquant][victime])
+[105,205,305,405,505,605,105,205,305,405,505,605],
+[104,204,304,404,504,604,104,204,304,404,504,604],
+[103,203,303,403,503,603,103,203,303,403,503,603],
+[102,202,302,402,502,602,102,202,302,402,502,602],
+[101,201,301,401,501,601,101,201,301,401,501,601],
+[100,200,300,400,500,600,100,200,300,400,500,600],
+[105,205,305,405,505,605,105,205,305,405,505,605],
+[104,204,304,404,504,604,104,204,304,404,504,604],
+[103,203,303,403,503,603,103,203,303,403,503,603],
+[102,202,302,402,502,602,102,202,302,402,502,602],
+[101,201,301,401,501,601,101,201,301,401,501,601],
+[100,200,300,400,500,600,100,200,300,400,500,600]]
+
+
+
+EMPTY_POS = "8/8/8/8/8/8/8/8 b - - "
+START_POS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
+TRICKY_POS = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
+KILLER_POS = "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1"
+CMK_POS = "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 "
 
 # génération aléatoire d'un nombre pour le magic number ################################
 

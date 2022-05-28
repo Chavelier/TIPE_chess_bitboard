@@ -4,8 +4,8 @@
 """
 Created on Tue Mar  8 14:20:06 2022
 
-@author: Corto Cristofoli
-@co-author : Jeunier Hugo
+@author: Jeunier Hugo
+@co-author : Corto Cristofoli
 @secret-author : Lance-Perlick Come
 
 INTERFACE GRAPHIQUE
