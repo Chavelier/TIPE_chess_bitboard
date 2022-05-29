@@ -10,7 +10,6 @@ DEBUG SHELL
 """
 
 from engine import *
-import time
 import pyperclip
 
 ascii_f = False
@@ -49,17 +48,9 @@ while cmd not in ["q","quit","exit"]:
             depth = 4
         else:
             depth = int(cmd.split()[1])
-        tic = time.time()
-        mv,score,nodes,max_depth = E.bot_move(depth, board)
-        # coup = CASES[B.get_move_source(mv)]+CASES[B.get_move_target(mv)]
-        # piece = PIECE_LETTER[B.get_move_piece(mv)]
-        # print("piece : {} \nmeilleur coup : {} \nscore : {}".format(piece,coup, score))
-        print("Score calculé : %s"%score)
-        print("Noeuds visités : %s"%nodes)
-        print("Profondeur maximale atteinte : %s"%max_depth)
+        mv = E.bot_move(depth, board)
         board.make_move(mv)
-        print("Temps de calcul : %ss"%(time.time()-tic))
-        print("\ncoup joué : %s"%(PIECE_LETTER[mv.piece]+" "+CASES[mv.source]+CASES[mv.target]))
+
     elif cmd == "moves":
         board.print_move(board.side)
     elif cmd == "cfen":

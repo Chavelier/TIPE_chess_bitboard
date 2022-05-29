@@ -14,10 +14,11 @@ from engine import *
 B = Board()
 E = Engine()
 
-occ = B.set_bit(0, C4)
-occ = B.set_bit(occ,F6)
-B.print_bb(occ)
-B.print_bb(B.get_rook_attack(E4, occ))
+mv_list = B.legal_move_generation(B.side)
+mv_list2 = B.legal_move_generation(B.side)
+
+for i in range(len(mv_list)):
+    print(mv_list[i]==mv_list2[i])
 
 # B.set_fen(TRICKY_POS)
 # B.print_board()
