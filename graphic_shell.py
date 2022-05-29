@@ -17,6 +17,7 @@ import time
 import sys
 import math
 import pyperclip
+import openfinals
 from init import *
 from pygamebutton import Button
 
@@ -125,7 +126,8 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False,hi
                         mv = B.trad_move(coup)
                         if mv != -1:
                             val_move = B.make_move(mv)
-                            #print(engine.find_book_moves(chess.Board('rnbqkb1r/ppp1ppp1/5n2/3p3p/3P4/5NP1/PPP1PP1P/RNBQKB1R w KQkq - 0 4')))
+                            print(openfinals.find_book_moves(B.get_fen()))
+                            #print(openfinals.find_endgame_pos_val(None))
                             if val_move == 1:
                                 move_made,animate = True,True
                                 play_sound(mv)

@@ -244,7 +244,6 @@ class Board:
                 case,occ_case = 8*i+j,False
                 for k in range(12):
                     if self.get_bit(self.bitboard[k],case):
-                        print(PIECE_LETTER[k])
                         if vide != 0:
                             ligne += str(vide)
                         ligne += PIECE_LETTER[k]
