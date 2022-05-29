@@ -9,12 +9,13 @@ Created on Tue Mar  8 14:20:06 2022
 DEBUG SHELL
 """
 
-from board import *
+from engine import *
 import pyperclip
 
 ascii_f = False
-B = Board()
-pyperclip.copy(B.get_fen())
+board = Board()
+E = Engine()
+
 
 
 def clear():
@@ -28,34 +29,50 @@ while cmd not in ["q","quit","exit"]:
     print("Bienvenue dans le moteur d'echec de Corto et Hugo ! \n Tapez help pour les commandes... \n\n\n")
     if cmd == "help":
         print("redemarer une nouvelle partie -> restart")
-        print("jouer un coup -> (case de depart)(case d'arrivee)(promotion) (ex : e2e4 ou c2c1q)")
+        print("jouer un coup -> [depart][arrivee][promotion] (ex : e2e4 ou c2c1q)")
         print("annuler un coup -> undo")
+        print("jouer un coup d'ordinateur à la profondeur x -> go [x]")
         print("activer/desactiver l'affichage ASCII -> ascii")
         print("afficher la liste des coups jouables -> moves")
         print("charger un fen -> fen rnbqkbnr/ppp2ppp/4p3/3p4/Q1PP4/8/PP2PPPP/RNB1KBNR b KQkq - 1 3 (ex)")
+        print("copier le fen -> cfen")
+        print("tester les performances à la profondeur x -> perf [x]")
     elif cmd == "restart":
-        B.init()
+        board.init()
+    elif cmd == "debug":
+        board.add_to_history()
     elif cmd == "ascii":
         ascii_f = not ascii_f
+    elif "go" in cmd:
+        if cmd == "go":
+            depth = 4
+        else:
+            depth = int(cmd.split()[1])
+        mv = E.bot_move(depth, board)
+        board.make_move(mv)
+
     elif cmd == "moves":
-        B.print_move(B.side)
-    elif cmd[0:9] == "bitboard ":
-        print(PIECE_LETTER.index(cmd[9:]))
-        B.print_bb(PIECE_LETTER.index(cmd[9:]))
-    elif cmd[0:4] == "fen ":
+        board.print_move(board.side)
+    elif cmd == "cfen":
+        pyperclip.copy(board.get_fen())
+    elif  cmd[0:4] == "fen ":
         fen = str(cmd[4:])
         print(fen)
-        B.set_fen(fen)
+        board.set_fen(fen)
+    elif "perf" in cmd:
+        depth = int(cmd.split()[1])
+        board.perft_test(depth)
     elif cmd == "undo":
-        B.undo_move(True)
+        board.undo_move(True)
     elif 4 <= len(cmd) <= 5:
         coup = cmd
         if len(cmd) == 4:
             coup += " "
-        mv = B.trad_move(coup)
+        mv = board.trad_move(coup)
         if mv != -1:
-            B.make_move(mv)
+            print(board.score_move(mv))
+            board.make_move(mv)
 
 
-    B.print_board(ascii_f)
+    board.print_board(ascii_f)
     cmd = input("\n>>> ")
