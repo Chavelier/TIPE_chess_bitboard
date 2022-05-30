@@ -101,7 +101,7 @@ class Engine:
         # # tri PV variables
         # self.is_following_pv = False
         # self.is_score_pv = False
-        #
+        
         # tic = time.time()
         # score = self.alphabeta(-50000,50000,depth,board)
         # pv = ""
@@ -348,3 +348,19 @@ class Engine:
             cle_pot = rd.randint(0,ALL)
         used_keys.append(cle_pot)
         self.side_key = cle_pot
+
+
+    def position_hash(self,board):
+        hash = 0
+        hash ^= self.castle_keys[board.castle_right]
+        if board.en_passant != -1:
+            hash ^= self.enpassant_keys[board.en_passant]
+        if board.side:
+            hash ^= self.side_key
+        for piece in range(12):
+            bb = board.bitboard[piece]
+            while bb:
+                case = board.ls1b(bb)
+                bb = board.pop_bit(bb)
+                hash ^= self.piece_keys[piece][case]
+        return hash
