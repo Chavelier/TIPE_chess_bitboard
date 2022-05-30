@@ -1,1194 +1,366 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Feb  21 12:35:18 2022
+Created on Mon Mar 28 11:39:03 2022
 
 @author: Corto Cristofoli
 @co-author : Jeunier Hugo
 @secret-author : Lance-Perlick Come
 
-BOARD
+ENGINE
 """
 
-from init import *
-import time
+from board import *
 
-class Move:
-    """ Représentation des coups """
+# constantes
+MAX_PLY = 64 # profondeur de recherche maximum
+ASPIRATION_WINDOW = 50 # utile pour la recherche en profondeur itérative
+FULL_DEPTH_MOVES = 4 # le nombre de coups qu'on regarde avant de réduire potentiellement les suivants
+REDUCTION_LIMIT = 3
 
-    def __init__(self,source=0,target=0,piece=NO_PIECE,promotion=NO_PIECE,capture=0,double=0,enpassant=0,castling=0):
-        self.source = source
-        self.target = target
-        self.piece = piece
-        self.promotion = promotion
-        self.capture = capture
-        self.double = double
-        self.enpassant = enpassant
-        self.castling = castling
-        self.id = self.source | (self.target << 6) | (self.piece << 12) | (self.promotion << 16) | (self.capture << 20) | (self.double << 21) | (self.enpassant << 22) | (self.castling << 23)
-
-    def txt(self,f=True):
-        mv = ""
-        if f:
-            mv += PIECE_LETTER[self.piece]+"_"
-        mv += CASES[self.source]+CASES[self.target]+PIECE_LETTER[self.promotion].lower()
-        return mv
-
-
-class Board:
-    """ Représentation de l'échéquier """
+class Engine:
+    """ Représentation de l'intelligence artificielle """
 
     def __init__(self):
-        self.init()
+        self.ply = 0 # compteur de la profondeur (en demi coups)
+        self.clear_variables()
 
-    def init(self):
-        """ initialise l'échéquier """
-
-        self.side = WHITE
-
-        self.bitboard = [ # P N B R Q K p n b r q k
-            71776119061217280,
-            2**57+2**62,
-            2**58+2**61,
-            2**56+2**63,
-            2**59,
-            2**60,
-            65280,
-            2**1+2**6,
-            2**2+2**5,
-            2**0+2**7,
-            2**3,
-            2**4
-            ]
-        self.occupancies = [0,0,0]
-        for i in range(6):
-            self.occupancies[0] |= self.bitboard[i]
-            self.occupancies[1] |= self.bitboard[i+6]
-        self.occupancies[2] = self.occupancies[0] | self.occupancies[1]
-
-        self.en_passant = -1 # case pour manger en passant, si =-1 pas de case
-
-        self.castle_right = 0b1111 #droits au roque
-        # 0001 -> le roi blanc peut roquer à l'aile roi
-        # 0010 -> le roi blanc peut roquer à l'aile dame
-        # 0100 -> le roi noir peut roquer à l'aile roi
-        # 1000 -> le roi noir peut roquer à l'aile dame
-
-        self.history = []
-        self.history.append((self.bitboard[:], self.occupancies[:], self.side, self.en_passant, self.castle_right))
-
-        # tables d'attaques
-        self.pawn_attack = [[], []]
-        self.knight_attack = []
-        self.king_attack = []
-        self.init_leaper_attack()
-
-        self.bishop_attacks = [[0 for _ in range(512)] for _ in range(64)]
-        self.rook_attacks = [[0 for _ in range(4096)] for _ in range(64)]
-        self.usemagic = True # on utilise ou non le magic bitboard
-        self.init_magic_numbers()
-        self.init_slider_attack()
+        # hash variables
+        self.piece_keys = [[0 for _ in range(64)] for _ in range(12)]
+        self.enpassant_keys = [0 for _ in range(64)]
+        self.castle_keys = [0 for _ in range(16)]
+        self.side_key = 0
+        self.init_random_keys()
 
 
+    def clear_variables(self):
+        self.pv_length = [0 for _ in range(MAX_PLY)]
+        self.pv_table = [[Move() for _ in range(MAX_PLY)] for _ in range(MAX_PLY)]
 
-    # fonctions sur les bits -----------------------------------------------------------------------
+        self.killer_moves = [[Move() for _ in range(MAX_PLY)],[Move() for _ in range(MAX_PLY)]] # utile dans le tri des coups
+        self.history_moves = [[0 for _ in range(64)] for _ in range(12)] # utile dans le tri des coups
 
-    @staticmethod
-    def set_bit(bitboard, case):
-        """ bb , int -> bb
-        renvoi le bitboard auquel on a mis un 1 sur la case """
-        return bitboard | (1 << case)
 
-    @staticmethod
-    def pop_bit(bitboard, case):
-        """ bb , int -> bb
-        renvoi le bitboard auquel on a mis un 0 sur la case """
-        return bitboard & ~(1 << case)
+    def bot_move(self,depth,board):
 
-    @staticmethod
-    def switch_bit(bitboard, case):
-        """ U64 , int -> U64
-        renvoi le bitboard auquel on a change le bit de la case """
-        return bitboard ^ (1 << case)
+        # tri PV variables
+        self.is_following_pv = False
+        self.is_score_pv = False
+        # statistiques sur l'ia
+        self.nodes = 0 # compteur des noeuds visités
+        self.max_depth = 0
+        self.clear_variables()
 
-    @staticmethod
-    def get_bit(bitboard, case):
-        """ U64 , int -> bool
-        renvoi si le bit de la case demandee du bitboard est occupé"""
-        return (bitboard & (1 << case) != 0)
 
-    @staticmethod
-    def count_bit(bitboard):  # verifier efficacite (static inline equivalent)
-        """ U64 -> int
-        renvoi le nombre de bit du bitboard """  # TODO: on peut ameliorer la fonction
-        bb = bitboard
-        count = 0
-        while bb:
-            count += 1
-            bb = bb & (bb-1)  # enleve le bit le moins signifiant
-        return count
+        # recherche en profondeur itérative
+        temps_tot = 0
+        alpha = -50000
+        beta = 50000
+        print("Profondeur    Noeuds    Profondeur maximale    Temps    Principale variation\n")
+        for current_depth in range(1,depth+1):
+            self.is_following_pv = True
+            # statistiques sur l'ia
+            self.nodes = 0 # compteur des noeuds visités
+            self.max_depth = 0
 
-    @staticmethod
-    def ls1b_index(bitboard):  # verifier efficacite (static inline equivalent)
-        """ U64 -> int
-        renvoi l'index du bit le moins signifiant """  # TODO: on peut ameliorer la fonction
-        return Board.count_bit((bitboard & -bitboard)-1)
+            tic = time.time()
 
-# AFFICHAGE / DEBUG ######################################################################################
+            score = self.alphabeta(alpha,beta,current_depth,board)
+            if score <= alpha or score >= beta:
+                alpha = -50000
+                beta = 50000
+                print("erreur de fenêtre")
+                score = self.alphabeta(alpha,beta,current_depth,board)
+                # voir si on a besoin de calculer cette valeur ou si on peut continue
+            else:
+                alpha = score-ASPIRATION_WINDOW
+                beta = score+ASPIRATION_WINDOW
 
-    def print_bb(self, bitboard):
-        """ bb -> ()
-        affiche le bitboard sous une forme lisible """
-        print("val : %s \n" % bitboard)
-        for i in range(8):
-            ligne = str(8-i)+"   "
-            for j in range(8):
-                if Board.get_bit(bitboard, 8*i+j):
-                    txt = 'x'
-                else:
-                    txt = '.'
-                ligne += txt+" "
+            tac = time.time()
+            temps = tac - tic
+            temps_tot += temps
+
+            pv = ""
+            for i in range(self.pv_length[0]):
+                move = self.pv_table[0][i]
+                pv += move.txt(True)+" "
+            ligne = " "*9+str(current_depth)
+            ligne += " "*(10-len(str(self.nodes)))+str(self.nodes)
+            ligne += " "*(23-len(str(self.max_depth)))+str(self.max_depth)
+            ligne +=" "*(8-len(str(round(time.time()-tic,2))))+str(round(temps,2))+"s"
+            ligne += " "*4+pv
             print(ligne)
-        print("\n    a b c d e f g h\n")
+        print("\nScore calculé : %s"%score)
+        print("Temps total : %ss\n\n\n"%round(temps_tot,3))
 
-    def print_board(self,unicode=False):
-        """ affiche l'échequier dans la console """
 
-        print()
-        for x in range(8):
-            ligne = str(8-x)+"   "
-            for y in range(8):
-                case = x * 8 + y
+        # # efficacité iteration comparaison
+        # self.clear_variables()
+        # # statistiques sur l'ia
+        # self.nodes = 0 # compteur des noeuds visités
+        # self.max_depth = 0
+        # # tri PV variables
+        # self.is_following_pv = False
+        # self.is_score_pv = False
+        
+        # tic = time.time()
+        # score = self.alphabeta(-50000,50000,depth,board)
+        # pv = ""
+        # for i in range(self.pv_length[0]):
+        #     move = self.pv_table[0][i]
+        #     pv += move.txt()+" "
+        # print("Principale variation : %s"%pv)
+        # print("Score calculé : %s"%score)
+        # print("Noeuds visités : %s"%self.nodes)
+        # print("Profondeur maximale atteinte : %s"%self.max_depth)
+        # print("Temps de calcul : %ss"%(time.time()-tic))
 
-                char = ""
-                for i in range(12):
-                    if self.get_bit(self.bitboard[i],case):
-                        if unicode:
-                            char += PIECE_ASCII[i]
-                        else:
-                            char += PIECE_LETTER[i]
-                if char == "":
-                    char = "."
-                ligne += char + " "
+        return self.pv_table[0][0]
 
-            print(ligne)
-        print("\n    a b c d e f g h\n")
-        if self.side:
-            print("Trait : Noirs")
-        else:
-            print("Trait : Blancs")
-        if self.en_passant != -1:
-            print("En passant : %s"%CASES[self.en_passant])
-        print("Droits au roque : %s"%bin(self.castle_right)[2:])
-        print("Evaluation côté blanc (en centipions) : %s"%self.evaluation())
-        print("Historique schéma : %s"%self.history_debug())
 
-    def is_occupancies_correct(self):
-        occ0 = 0
-        occ1 = 0
-        for i in range(6):
-            occ0 |= self.bitboard[i]
-            occ1 |= self.bitboard[i+6]
-        occ2 = occ0 | occ1
-        print(occ0 == self.occupancies[0], occ1 == self.occupancies[1], occ2 == self.occupancies[2])
 
-    # performance test
-    def perft(self,depth):
+    def alphabeta(self,alpha,beta,depth,board):
+        """ algorithme de recherche du meilleur coup """
+
+        self.pv_length[self.ply] = self.ply # a voir si on peut pas écrire ça dans bot move
+
         if depth == 0:
-            return 1
-        move_list = self.move_generation(self.side)
-        somme = 0
+            # return board.naive_eval()
+            # return board.evaluation(False)
+            return self.quiescence(alpha, beta, board) # on fait appel à la fonction de recherche simplifiée
+        if self.ply >= MAX_PLY: #pour ne pas aller trop loin dans la recherche
+            return board.evaluation(False)
+
+        in_check = board.square_is_attacked(board.ls1b_index(board.bitboard[K+6*board.side]), 1^board.side) # est ce que le roi est en echec
+        if in_check: # on ne cherche un peu plus loin si il y a echec
+            depth += 1
+
+        self.nodes += 1
+        is_legal_move = False
+
+        # élagage par coup nul
+        # attention au zugzang ! (mais c en finale et en finale on a un autre systeme)
+        if depth >= 3 and self.ply and not in_check:
+            board.side ^= 1 # on change le côté qui joue (on donne littéralement un coup en plus)
+            board.en_passant = -1 # on le réinitialise pour éviter des coups etranges
+            board.add_to_history() # on ajoute cette étrange position à l'historique afin de pouvoir appliquer l'algorithme dessus
+            score = -self.alphabeta(-beta, -beta+1, depth-3, board) # on regarde simplement si il existe un "bon coup" pour l'autre cote a une profondeur réduite
+            board.undo_move(True)
+            if score >= beta: # il n'en existe pas
+                return beta # on suppose donc que un de nos coups va laisser cette position superieure à beta
+
+        move_list = board.move_generation(board.side)
+        if self.is_following_pv:
+            self.enable_pv_scoring(move_list)
+        move_list = self.tri_move(move_list,board) # on tri les coups avec la méthode MVV LVA
+        # rd.shuffle(move_list) ### l'ordre a une importance
+
+        moves_searched = 0 # nombre de coups analysés
         for mv in move_list:
-            if self.make_move(mv): # si le coup est legal le fait
-                somme += self.perft(depth-1)
-                self.undo_move(True)
-        return somme
+            if not board.make_move(mv): # le coup n'est pas legal
+                continue # on le passe donc
+            is_legal_move = True # il existe un coup legal
 
-    @staticmethod
-    def get_ms():
-        return int(round(time.time() * 1000))
+            self.ply += 1
 
-    def perft_test(self,depth):
-        tic = Board.get_ms()
-        print("\n\nProfondeur   Nombres de coups")
-        for i in range(1,depth+1):
-            print("{0}            {1}".format(i,self.perft(i)))
-        tac = Board.get_ms()
-        print("\nTemps : %s ms"%(tac-tic))
-        print("        %s min"%round((tac-tic)/60000,2))
-# performance test
 
-    def set_fen(self,fen):
-        '''Update le board en fonction d'un fenboard donné en argument'''
-
-        self.bitboard = [0 for i in range(12)]
-
-        sep_espace = fen.split(' ')
-        pieces_par_ligne = sep_espace[0].split('/')
-        vide,droits,passant = [str(i+1) for i in range(8)],sep_espace[2],sep_espace[3]
-
-        self.side = (sep_espace[1] == 'b')
-        # if sep_espace[1] == 'w':
-        #     self.side = WHITE
-        # else: self.side = BLACK
-
-        for ligne in range(len(pieces_par_ligne)):
-            col = 0
-            for piece in pieces_par_ligne[ligne]:
-                if piece in vide: # ce n'est pas une piece c'est un nombre
-                    col += int(piece)
+            #### DETERMINATION DU SCORE ####
+            if moves_searched == 0: # on fait une recherche normale
+                score = -self.alphabeta(-beta,-alpha,depth-1,board)
+            else: # Late Move Reduction (LMR)
+                if moves_searched >= FULL_DEPTH_MOVES and depth >= REDUCTION_LIMIT and not in_check and not mv.capture and mv.promotion == NO_PIECE: # condition pour considerer la LMR
+                    score = -self.alphabeta(-alpha-1, -alpha, depth-2, board)
                 else:
-                    case = ligne*8 + col
-                    elem = PIECE_LETTER.index(piece)
-                    self.bitboard[elem] = self.set_bit(self.bitboard[elem], case)
-                    col += 1
+                    score = alpha + 1
+                if score > alpha: # PVS
+                    score = -self.alphabeta(-alpha-1,-alpha,depth-1,board) # on recherche en supposant que tous les coups restants sont moins bons
+                    if score > alpha and score < beta: # on s'est trompé il existe, un meilleur coup, on a perdu du temps mais globalement c'est plus efficace
+                        score = -self.alphabeta(-beta,-alpha,depth-1,board)
+            #### FIN DETERMINATION DU SCORE ####
+
+
+            self.ply -=1
+            board.undo_move(True)
+            moves_searched += 1
+
+            if score >= beta: # fail high-> on coupe cette partie
+                if not mv.capture: # on n'enregistre seulement les coups discrets
+                    self.killer_moves[1][self.ply] = self.killer_moves[0][self.ply] # on garde en mémoire l'ancien killer move
+                    self.killer_moves[0][self.ply] = mv # on enregistre le killer move
+
+                return beta
+
+            if score > alpha: #on a trouvé un meilleur coup, on est donc dans la variation principale
+                if not mv.capture: # on n'enregistre seulement les coups discrets
+                    self.history_moves[mv.piece][mv.target] += depth # enlève des noeuds mais pas l'impression que ça accélère
+
+                alpha = score
+
+                # on écrit la principale variation
+                self.pv_table[self.ply][self.ply] = mv
+                #on recopie dans les branches supérieures les anciens coups
+                for next_ply in range(self.ply+1,self.pv_length[self.ply+1]):
+                    self.pv_table[self.ply][next_ply] = self.pv_table[self.ply + 1][next_ply]
+                self.pv_length[self.ply] = self.pv_length[self.ply+1]
+
+        if not is_legal_move:
+            if in_check:
+                return -49000+self.ply # si echec alors il y a mat (le + self.ply assure le mat le plus court)
+            else:
+                return 0 # sinon c'est pat
+
+        return alpha
+
+
+
+    def quiescence(self,alpha,beta,board):
+        """ algorithme alpha beta simplifié pour éviter l'effet d'horizon """
+
+        self.nodes += 1
+
+        if self.ply > self.max_depth:
+            self.max_depth = self.ply
+
+        eval = board.evaluation(False)
+        if eval >= beta: # le coup n'est pas optimal pour un des deux cotés
+            return beta
+        if eval > alpha:
+            alpha = eval
+        if self.ply >= MAX_PLY: #pour ne pas aller trop loin dans la recherche
+            return board.evaluation(False)
+
+        move_list = board.move_generation(board.side)
+        move_list = self.tri_move(move_list,board) # on tri les coups avec la méthode MVV LVA
+        for mv in move_list:
+            if not board.make_move(mv,True): #on ne regarde que les captures
+                continue # le coup n'est pas legal, on le passe donc
+            self.ply += 1
+            score = -self.quiescence(-beta,-alpha,board)
+            self.ply -=1
+            board.undo_move(True)
+
+            if score >= beta:
+                return beta
+            if score > alpha: #on a trouvé un meilleur coup
+                alpha = score
+        return alpha
+
+
+######################################################################################################
+########### TRI DES COUPS ############################################################################
+######################################################################################################
+
+    """
+        Les coups sont ordonnés de la manière suivante :
+        1. PV moves
+        2. capture MVV_LVA
+        3. 1er killer move
+        4. 2nd killer move
+        5. history moves
+        6. les autres
+    """
+
+    def score_move(self,move,board):
+        """ renvoi un score a un coup pour permettre de trier l'ordre des coups pour l'algorithme alpha-beta """
+        if self.is_score_pv and move.id == self.pv_table[0][self.ply].id:
+            self.is_score_pv = False
+            return 20000 # on met les coups de la principale variation en premier
+        if not move.capture: # on attribue une valeur plus faible aux coups ne capturant rien
+            if move.id == self.killer_moves[0][self.ply].id:
+                return 9000
+            if move.id == self.killer_moves[1][self.ply].id:
+                return 8000
+            return self.history_moves[move.piece][move.target]
+
 
-        self.occupancies = [0,0,0]
-        for i in range(6):
-            self.occupancies[0] |= self.bitboard[i]
-            self.occupancies[1] |= self.bitboard[i+6]
-        self.occupancies[2] = self.occupancies[0] | self.occupancies[1]
-
-        if passant == '-':
-            self.en_passant = -1 # case pour manger en passant, si =-1 pas de case
-        else:
-            self.en_passant = CASES.index(passant)
-
-        dico,somme = {'K':1, 'Q':2, 'k':4, 'q':8, '-':0},0
-        for s in droits:
-            somme += dico[s]
-        self.castle_right = somme #droits au roque
-        self.add_to_history()
-
-    def get_fen(self):
-        """Code la position en Notation Forsyth-Edwards"""
-
-        placement_pieces = ''
-        for i in range(8): #Pour chaque ligne
-            ligne = ''
-            vide = 0
-            for j in range(8): #Pour chaque colonne
-                case,occ_case = 8*i+j,False
-                for k in range(12):
-                    if self.get_bit(self.bitboard[k],case):
-                        print(PIECE_LETTER[k])
-                        if vide != 0:
-                            ligne += str(vide)
-                        ligne += PIECE_LETTER[k]
-                        vide,occ_case = 0,True
-                if not(occ_case):
-                    vide += 1
-            if vide != 0:
-                ligne += str(vide)
-            placement_pieces += ligne + "/"
-
-        fenboard = placement_pieces[:-1]
-
-
-        if self.side == WHITE:
-            fenboard += ' w '
-        else:
-            fenboard += ' b '
-
-        droit_aux_roques = ''
-        if self.castle_right & 1: # king castling
-            droit_aux_roques += 'K'
-        if self.castle_right & 2: # queen castling
-            droit_aux_roques += 'Q'
-
-        if self.castle_right & 4: # king castling
-            droit_aux_roques += 'k'
-        if self.castle_right & 8: # queen castling
-            droit_aux_roques += 'q'
-        fenboard += droit_aux_roques + ' '
-
-        if self.en_passant != -1:
-            fenboard += CASES[self.en_passant] + ' '
-        else:
-            fenboard += '- '
-        return fenboard + '0 1' #TODO LE COMPTAGE
-
-    def move_to_pgn(self,move,valid_moves):
-        "Prend en entrée un coup et renvoie sa traduction en PGN. Ex : Qxe5+"
-
-        if move.castling:
-            if move.target == G1 or move.target == G8:
-                return "O-O"
-            else: return "O-O-O"
-
-        txt = ''
-        piece = move.piece
-        case_arrivee = move.target
-        case_depart = move.source
-
-        if piece == p or piece == P:
-            if move.capture:
-                txt += CASES[case_depart][0] + 'x'
-        else:
-            txt += PIECE_LETTER[piece].upper()
-            l,temp = valid_moves,''
-            for move_temp in l:
-                if move_temp.target == case_arrivee and (move_temp.id != move.id):
-                    if move_temp.piece == piece:
-                        case_depart_temp = move_temp.source
-                        if case_depart_temp//8 == case_depart//8:
-                            temp += CASES[case_depart][1]
-                        else:
-                            temp += CASES[case_depart][0]
-            if move.capture:
-                temp = 'x' + temp
-            txt += temp
-
-        txt2 = ''
-        if self.square_is_attacked(self.ls1b_index(self.bitboard[K+self.side*6]),1-self.side):
-            txt2 += '+'
-
-        return txt + CASES[case_arrivee] + txt2
-
-    # INITIALISATION DES ATTAQUES ###########################################################################
-
-    def init_leaper_attack(self):
-        """ génère les listes d'attaque possible de chaque pièces "sautante" """
-
-        for case in range(64):
-
-            # on initialise les attaques de pion
-            self.pawn_attack[0].append(self.mask_pawn_attack(case, WHITE))
-            self.pawn_attack[1].append(self.mask_pawn_attack(case, BLACK))
-
-            #on initialise les attaques de cavalier
-            self.knight_attack.append(self.mask_knight_attack(case))
-
-            #on initialise les attaques du roi
-            self.king_attack.append(self.mask_king_attack(case))
-
-    def init_slider_attack(self):
-        """ génère les mouvements des pièces "glissantes" en fonction de leur position et de l'échequier """
-        self.bishop_mask = []
-        self.rook_mask = []
-        self.bishop_attacks = [[0 for _ in range(512)] for _ in range(64)]
-        self.rook_attacks = [[0 for _ in range(4096)] for _ in range(64)]
-
-        for case in range(64):
-            # on initialise les masks
-            self.bishop_mask.append(self.mask_bishop_attack(case))
-            self.rook_mask.append(self.mask_rook_attack(case))
-
-
-            attack_mask1 = self.bishop_mask[case] # pour le fou
-            attack_mask2 = self.rook_mask[case] # pour la tour
-
-            # relevant_bits_count1 = self.count_bit(attack_mask1) # pour le fou
-            # relevant_bits_count2 = self.count_bit(attack_mask2) # pour la tour
-            relevant_bits_count1 = BISHOP_RELEVANT_BITS[case] # pour le fou
-            relevant_bits_count2 = ROOK_RELEVANT_BITS[case] # pour la tour
-
-            for i in range(1<<relevant_bits_count1):
-                occupancy = self.set_occupancy(i, relevant_bits_count1, attack_mask1)
-
-                magic_index = ((occupancy * self.bishop_magic_numbers[case])&ALL) >> (64-relevant_bits_count1)
-
-                self.bishop_attacks[case][magic_index] = self.bishop_attack_on_the_fly(case,occupancy)
-            for i in range(1<<relevant_bits_count2):
-                occupancy = self.set_occupancy(i, relevant_bits_count2, attack_mask2)
-
-                magic_index = ((occupancy * self.rook_magic_numbers[case])&ALL) >> (64-relevant_bits_count2)
-
-                self.rook_attacks[case][magic_index] = self.rook_attack_on_the_fly(case,occupancy)
-
-    def get_bishop_attack(self,case,occ,):
-        """ renvoi un bitboard de l'attaque du fou en fonction de l'occupance de l'échéquier """
-        if self.usemagic:
-            id = (((occ & self.bishop_mask[case]) * self.bishop_magic_numbers[case])&ALL) >> (64-BISHOP_RELEVANT_BITS[case])
-            return self.bishop_attacks[case][id]
-        return self.bishop_attack_on_the_fly(case, occ) # on n'utilise pas le magic bitboard dans ce cas là (peut être utile pour debug)
-    def get_rook_attack(self,case,occ):
-        """ renvoi un bitboard de l'attaque de la tour en fonction de l'occupance de l'échéquier """
-        if self.usemagic:
-            id = (((occ & self.rook_mask[case]) * self.rook_magic_numbers[case])&ALL) >> (64-ROOK_RELEVANT_BITS[case])
-            return self.rook_attacks[case][id]
-        return self.rook_attack_on_the_fly(case, occ) # on n'utilise pas le magic bitboard dans ce cas là (peut être utile pour debug)
-    def get_queen_attack(self,case,occ):
-        return self.get_bishop_attack(case, occ) | self.get_rook_attack(case, occ)
-
-    # ATTAQUES DES PIECES ###############################################################################
-
-    def mask_pawn_attack(self, case, side):
-        """ int , bool -> bb
-        renvoi le bitboard de l'attaque du pion situé sur la case passée en argument """
-
-        attack = 0
-        bb = Board.set_bit(0, case)  # position du pion en bitboard
-
-        if side == WHITE:
-            attack = ((bb & NOT_H_FILE) >> 7) | (
-                (bb & NOT_A_FILE) >> 9)
-        else:
-            attack = ((bb & NOT_A_FILE) << 7) | (
-                (bb & NOT_H_FILE) << 9)
-
-        return ALL & attack # evite d'avoir un entier de plus de 64 bit
-
-    def mask_knight_attack(self, case):
-        """ int , bool -> bb
-        renvoi le bitboard de l'attaque du cavalier situé sur la case passée en argument """
-
-        attack = 0
-        bb = Board.set_bit(0, case)  # position du cavalier en bitboard
-
-        attack = (bb & NOT_H_FILE) >> 15
-        attack = attack | (bb & NOT_A_FILE) >> 17
-        attack = attack | (bb & NOT_AB_FILE) >> 10
-        attack = attack | (bb & NOT_GH_FILE) >> 6
-        attack = attack | (bb & NOT_A_FILE) << 15
-        attack = attack | (bb & NOT_H_FILE) << 17
-        attack = attack | (bb & NOT_GH_FILE) << 10
-        attack = attack | (bb & NOT_AB_FILE) << 6
-
-        return ALL & attack # evite d'avoir un entier de plus de 64 bit
-
-    def mask_king_attack(self, case):
-        """ int , bool -> bb
-        renvoi le bitboard de l'attaque du roi situé sur la case passée en argument """
-
-        attack = 0
-        bb = Board.set_bit(0, case)  # position du roi en bitboard
-
-        attack = bb >> 8 | bb << 8
-        if bb & NOT_A_FILE:
-            attack = attack | bb >> 1 | bb >> 9 | bb << 7
-        if bb & NOT_H_FILE:
-            attack = attack | bb << 1 | bb << 9 | bb >> 7
-
-        return ALL & attack # evite d'avoir un entier de plus de 64 bit
-
-    def mask_bishop_attack(self, case):
-        """ int , bool -> U64
-        renvoi le bitboard de l'attaque du fou situé sur la case passée en argument """
-
-        attack = 0
-
-        rank, file = case//8, case % 8  # ligne et colonne de la pieces
-        for i in range(1, min(7-rank, 7-file)):
-            r, f = rank+i, file+i
-            attack = attack | 1 << (r*8 + f)
-        for i in range(1, min(rank, file)):
-            r, f = rank-i, file-i
-            attack = attack | 1 << (r*8 + f)
-        for i in range(1, min(7-rank, file)):
-            r, f = rank+i, file-i
-            attack = attack | 1 << (r*8 + f)
-        for i in range(1, min(rank, 7-file)):
-            r, f = rank-i, file+i
-            attack = attack | 1 << r*8 + f
-
-        return attack
-
-    def mask_rook_attack(self, case):
-        """ int , bool -> U64
-        renvoi le bitboard de l'attaque de la tour situé sur la case passée en argument """
-
-        attack = 0
-
-        rank, file = case//8, case % 8  # ligne et colonne de la pieces
-        for i in range(1, 7-rank):
-            r, f = rank+i, file
-            attack = attack | 1 << (r*8 + f)
-        for i in range(1, rank):
-            r, f = rank-i, file
-            attack = attack | 1 << (r*8 + f)
-        for i in range(1, 7-file):
-            r, f = rank, file+i
-            attack = attack | 1 << (r*8 + f)
-        for i in range(1, file):
-            r, f = rank, file-i
-            attack = attack | 1 << (r*8 + f)
-
-        return attack
-
-    # PIECES GLISSANTES (sliding pieces) "on the fly" #####################################
-
-    def bishop_attack_on_the_fly(self, case, block):
-        """ renvoi le bitboard de l'attaque du fou en prenant en compte les pieces présente """
-        attack = 0
-
-        rank, file = case//8, case % 8  # ligne et colonne de la pieces
-        for i in range(1, min(8-rank, 8-file)):
-            r, f = rank+i, file+i
-            b = 1 << (r*8 + f)
-            attack = attack | b
-            if b & block:
-                break  # on sors de la boucle si on rencontre un bloqueur
-        for i in range(1, min(rank+1, file+1)):
-            r, f = rank-i, file-i
-            b = 1 << (r*8 + f)
-            attack = attack | b
-            if b & block:
-                break  # on sors de la boucle si on rencontre un bloqueur
-        for i in range(1, min(8-rank, file+1)):
-            r, f = rank+i, file-i
-            b = 1 << (r*8 + f)
-            attack = attack | b
-            if b & block:
-                break  # on sors de la boucle si on rencontre un bloqueur
-        for i in range(1, min(rank+1, 8-file)):
-            r, f = rank-i, file+i
-            b = 1 << (r*8 + f)
-            attack = attack | b
-            if b & block:
-                break  # on sors de la boucle si on rencontre un bloqueur
-
-        return attack
-
-    def rook_attack_on_the_fly(self, case, block):
-        """ renvoi le bitboard de l'attaque de la tour en prenant en compte les pieces présente """
-        attack = 0
-
-        rank, file = case//8, case % 8  # ligne et colonne de la pieces
-        for i in range(1, 8-rank):
-            r, f = rank+i, file
-            b = 1 << (r*8 + f)
-            attack = attack | b
-            if b & block:
-                break  # on sors de la boucle si on rencontre un bloqueur
-        for i in range(1, rank+1):
-            r, f = rank-i, file
-            b = 1 << (r*8 + f)
-            attack = attack | b
-            if b & block:
-                break  # on sors de la boucle si on rencontre un bloqueur
-        for i in range(1, 8-file):
-            r, f = rank, file+i
-            b = 1 << (r*8 + f)
-            attack = attack | b
-            if b & block:
-                break  # on sors de la boucle si on rencontre un bloqueur
-        for i in range(1, file+1):
-            r, f = rank, file-i
-            b = 1 << (r*8 + f)
-            attack = attack | b
-            if b & block:
-                break  # on sors de la boucle si on rencontre un bloqueur
-
-        return attack
-
-    # test si une case est attaquée #######################################################
-
-    def square_is_attacked(self,case,side):
-        """ int, bool -> bool
-            renvoi vrai si la case est attaqué par le coté choisi """
-        if side == WHITE:
-            if (self.pawn_attack[BLACK][case] & self.bitboard[P]): return True
-            if (self.knight_attack[case] & self.bitboard[N]): return True
-            if (self.king_attack[case] & self.bitboard[K]): return True
-            if (self.get_bishop_attack(case, self.occupancies[2]) & (self.bitboard[B] | self.bitboard[Q])): return True
-            if (self.get_rook_attack(case, self.occupancies[2]) & (self.bitboard[R] | self.bitboard[Q])): return True
-            return False
-        else:
-            if (self.pawn_attack[WHITE][case] & self.bitboard[p]): return True
-            if (self.knight_attack[case] & self.bitboard[n]): return True
-            if (self.king_attack[case] & self.bitboard[k]): return True
-            if (self.get_bishop_attack(case, self.occupancies[2]) & (self.bitboard[b] | self.bitboard[q])): return True
-            if (self.get_rook_attack(case, self.occupancies[2]) & (self.bitboard[r] | self.bitboard[q])): return True
-
-            return False
-
-    def attacked_bitboard(self,side):
-        bb = 0
-        for i in range(8):
-            for j in range(8):
-                if self.square_is_attacked(8*i+j,side):
-                    bb = Board.set_bit(bb, 8*i+j)
-        return bb
-
-
-    ######################################################################################
-    # // GENERATION DES COUPS // #########################################################
-    ######################################################################################
-
-    def move_generation(self,side):
-        """ génère les coups pseudo légaux possibles du côté donné en argument """
-
-        move_list = [] #liste des pseudo coups possibles encodé selon la forme d'au dessus
-
-        # castling rights
-        if side == WHITE:
-            if self.castle_right & 1: # king castling
-                if not (self.occupancies[2] & (2**F1 + 2**G1)):
-                    if (not self.square_is_attacked(E1, BLACK)) and (not self.square_is_attacked(F1, BLACK)):
-                        move_list.append(Move(E1, G1, K, NO_PIECE, 0, 0, 0, 1))
-            if self.castle_right & 2: # queen castling
-                if not (self.occupancies[2] & (2**D1 + 2**C1 + 2**B1)):
-                    if (not self.square_is_attacked(E1, BLACK)) and (not self.square_is_attacked(D1, BLACK)):
-                        move_list.append(Move(E1, C1, K, NO_PIECE, 0, 0, 0, 1))
-        else:
-            if self.castle_right & 4: # king castling
-                if not (self.occupancies[2] & (2**F8 + 2**G8)):
-                    if (not self.square_is_attacked(E8, WHITE)) and (not self.square_is_attacked(F8, WHITE)):
-                        move_list.append(Move(E8, G8, k, NO_PIECE, 0, 0, 0, 1))
-            if self.castle_right & 8: # queen castling
-                if not (self.occupancies[2] & (2**D8 + 2**C8 + 2**B8)):
-                    if (not self.square_is_attacked(E8, WHITE)) and (not self.square_is_attacked(D8, WHITE)):
-                        move_list.append(Move(E8, C8, k, NO_PIECE, 0, 0, 0, 1))
-
-        for piece in range(side*6,(side+1)*6): # on selectionne la bonne partie de bitboard en fonction du side
-            bb = self.bitboard[piece]
-
-            if piece == P : # pion blanc
-                while bb:
-                    depart = self.ls1b_index(bb)
-                    bb = self.pop_bit(bb, depart) # on enlève la case de départ afin de regarder ensuite les suivantes
-
-                    # attaque de pion
-                    is_attacking = self.pawn_attack[0][depart] & self.occupancies[1]
-                    while is_attacking:
-                        arrivee = self.ls1b_index(is_attacking)
-                        if arrivee <= H8: #on mange et on promotionne
-                            move_list.insert(0,Move(depart, arrivee, P, Q, 1, 0, 0, 0))
-                            move_list.insert(0,Move(depart, arrivee, P, R, 1, 0, 0, 0))
-                            move_list.insert(0,Move(depart, arrivee, P, B, 1, 0, 0, 0))
-                            move_list.insert(0,Move(depart, arrivee, P, N, 1, 0, 0, 0))
-                        else:
-                            move_list.insert(0,Move(depart,arrivee,P,NO_PIECE,1,0,0,0))
-                        is_attacking = self.pop_bit(is_attacking, arrivee)
-
-                    # prise en passant
-                    if self.en_passant != -1 and (self.pawn_attack[0][depart] & (1<<self.en_passant)):
-                        move_list.insert(0,Move(depart, self.en_passant, P, NO_PIECE, 1, 0, 1, 0))
-
-                    # coup de pion blanc discret
-                    arrivee = depart - 8
-                    if arrivee>= A8 and not self.get_bit(self.occupancies[2],arrivee):
-
-                        #promotion
-                        if arrivee <= H8: #le pion arrive sur la dernière rangée
-                            move_list.append(Move(depart,arrivee,P,Q,0,0,0,0))
-                            move_list.append(Move(depart,arrivee,P,R,0,0,0,0))
-                            move_list.append(Move(depart,arrivee,P,B,0,0,0,0))
-                            move_list.append(Move(depart,arrivee,P,N,0,0,0,0))
-                        else:
-                            # avancée de 2 cases
-                            if (A2 <= depart <= H2) and not self.get_bit(self.occupancies[2],arrivee-8):
-                                move_list.append(Move(depart,arrivee-8,P,NO_PIECE,0,1,0,0))
-                            move_list.append(Move(depart,arrivee,P,NO_PIECE,0,0,0,0))
-            elif piece == p : # pion noir
-                while bb:
-                    depart = self.ls1b_index(bb)
-                    bb = self.pop_bit(bb, depart) # on enlève la case de départ afin de regarder ensuite les suivantes
-
-                    # attaque de pion
-                    is_attacking = self.pawn_attack[1][depart] & self.occupancies[0]
-                    while is_attacking:
-                        arrivee = self.ls1b_index(is_attacking)
-                        if arrivee >= A1: #on mange et on promotionne
-                            move_list.insert(0,Move(depart, arrivee, p, q, 1, 0, 0, 0))
-                            move_list.insert(0,Move(depart, arrivee, p, r, 1, 0, 0, 0))
-                            move_list.insert(0,Move(depart, arrivee, p, b, 1, 0, 0, 0))
-                            move_list.insert(0,Move(depart, arrivee, p, n, 1, 0, 0, 0))
-                        else:
-                            move_list.insert(0,Move(depart, arrivee, p, NO_PIECE, 1, 0, 0, 0))
-
-                        is_attacking = self.pop_bit(is_attacking, arrivee)
-                    # prise en passant
-                    if self.en_passant != -1 and (self.pawn_attack[1][depart] & (1<<self.en_passant)):
-                        move_list.insert(0,Move(depart, self.en_passant, p, NO_PIECE, 1, 0, 1, 0))
-
-                    # coup de pion noir discret
-                    arrivee = depart + 8 # + pour noir - pour blanc
-                    if arrivee <= H1 and not self.get_bit(self.occupancies[2],arrivee):
-
-                        #promotion
-                        if arrivee >= A1: #le pion arrive sur la dernière rangée
-                            move_list.append(Move(depart,arrivee,p,q,0,0,0,0))
-                            move_list.append(Move(depart,arrivee,p,r,0,0,0,0))
-                            move_list.append(Move(depart,arrivee,p,b,0,0,0,0))
-                            move_list.append(Move(depart,arrivee,p,n,0,0,0,0))
-                        else:
-                            # avancée de 2 cases
-                            if (A7 <= depart <= H7) and not self.get_bit(self.occupancies[2],arrivee+8):
-                                move_list.append(Move(depart,arrivee+8,p,NO_PIECE,0,1,0,0))
-                            move_list.append(Move(depart,arrivee,p,NO_PIECE,0,0,0,0))
-            else: #autres pièces
-                while bb:
-                    depart = self.ls1b_index(bb)
-                    bb = self.pop_bit(bb, depart) # on enlève la case de départ afin de regarder ensuite les suivantes
-                    if piece in [K,k]:
-                        attack_map = self.king_attack[depart] & ~(self.occupancies[side]) # on ne regarde pas les cases où il y a nos propres pieces puisqu'on ne peut pas y aller.
-                    elif piece in [N,n]:
-                        attack_map = self.knight_attack[depart] & ~(self.occupancies[side])
-                    elif piece in [B,b]:
-                        attack_map = self.get_bishop_attack(depart, self.occupancies[2]) & ~(self.occupancies[side])
-                    elif piece in [R,r]:
-                        attack_map = self.get_rook_attack(depart, self.occupancies[2]) & ~(self.occupancies[side])
-                    else:
-                        attack_map = self.get_queen_attack(depart, self.occupancies[2]) & ~(self.occupancies[side])
-                    while attack_map:
-                        arrivee = self.ls1b_index(attack_map)
-                        attack_map = self.pop_bit(attack_map, arrivee)
-                        if self.get_bit(self.occupancies[2], arrivee): # il y a une prise
-                            move_list.insert(0,Move(depart, arrivee, piece, NO_PIECE, 1, 0, 0, 0)) #on met les captures au début de la liste
-                        else:
-                            move_list.append(Move(depart, arrivee, piece, NO_PIECE, 0, 0, 0, 0))
-
-
-        return move_list
-
-    def legal_move_generation(self,side):
-        liste = self.move_generation(side)
-        L = []
-        for move in liste:
-            if self.make_move(move):
-                L.append(move)
-                self.undo_move(True)
-        # print(L)
-        return L
-
-
-    def print_move(self,side,legal=True):
-        if legal:
-            liste = self.legal_move_generation(side)
-        else:
-            liste = self.move_generation(side)
-        print("\n")
-        print("Coup   Piece  Capture  Double  Enpassant  Roque")
-        print()
-        for move in liste:
-            coup = CASES[move.source] + CASES[move.target] + PIECE_LETTER[move.promotion].lower()
-            piece = PIECE_LETTER[move.piece]
-            capt = int(move.capture)
-            double = int(move.double)
-            enpass = int(move.enpassant)
-            roque = int(move.castling)
-            print("{0}  {1}      {2}        {3}       {4}          {5}".format(coup,piece,capt,double,enpass,roque))
-        print("\nNombre de coup : %s"%len(liste))
-
-
-    ############################################################################################################################################
-    ##### // MAKE MOVE and UNDO MOVE FUNCTIONS // ##############################################################################################
-    ############################################################################################################################################
-
-    def add_to_history(self):
-        """ ajoute la position actuelle à l'historique """
-        self.history.append((self.bitboard[:], self.occupancies[:], self.side, self.en_passant, self.castle_right))
-
-    def history_debug(self):
-        L = []
-        id = -1
-        last_pos = ([],[],0,0,0)
-        for pos in self.history:
-            # print(pos)
-            if pos != last_pos:
-                id += 1
-                last_pos = pos
-            L.append(id)
-        return L
-
-    def undo_move(self, real_move):
-        """ annule le dernier coup, si real_move = True alors on supprime d'abord la dernière entrée de l'historique sinon non """
-        if real_move and len(self.history) >= 2:
-            del self.history[-1]
-        (bb, occ, sd, enpass, castle) = self.history[-1]
-        self.bitboard = bb[:]
-        self.occupancies = occ[:]
-        self.en_passant = enpass
-        self.castle_right = castle
-        self.side = sd
-
-    def make_move(self, move, only_capture_flag=False):
-        """ fait le coup et l'ajoute à l'historique """
-
-        if only_capture_flag and not move.capture:
-            return 0 # on ne fait pas le coup
-
-        # on récupère les informations du coup
-        source = move.source
+        attaquant = move.piece
         target = move.target
-        piece = move.piece
-        promote = move.promotion
-        capture = move.capture
-        double = move.double
-        enpass = move.enpassant
-        roque = move.castling
+        offset = 6*(1^board.side)
+        victime = P
+        for piece in range(0+offset,6+offset):
+            if board.get_bit(board.bitboard[piece],target):
+                victime = piece
+                break
+        return 10000 + MVV_LVA[attaquant][victime]
 
-        # on déplace la pièce
-        self.bitboard[piece] = self.pop_bit(self.bitboard[piece], source)
+    def tri_move(self,move_list,board):
+        """ tri les coups selon leur score dans l'ordre décroissant """
+        # j'utilise un tri à bulles optimisé, à voir si c mieux de faire autrement
+        mv_list = move_list
+        score_list = [self.score_move(mv,board) for mv in mv_list]
 
-        if promote != NO_PIECE: # si il y a une promotion
-            self.bitboard[promote] = self.set_bit(self.bitboard[promote], target)
-        else:
-            self.bitboard[piece] = self.set_bit(self.bitboard[piece], target)
+        def echange(i,j):
+            # on échange les scores
+            temp = score_list[i]
+            score_list[i] = score_list[j]
+            score_list[j] = temp
+            # on échange les coups
+            temp = mv_list[i]
+            mv_list[i] = mv_list[j]
+            mv_list[j] = temp
 
-        self.occupancies[self.side] = self.pop_bit(self.occupancies[self.side], source)
-        self.occupancies[self.side] = self.set_bit(self.occupancies[self.side], target)
-        self.occupancies[2] = self.pop_bit(self.occupancies[2], source) # quel que soit le coup il n'y aura plus de piece sur la case d'origine
+        is_echange = True
+        fin = len(mv_list)-1
+        while is_echange:
+            is_echange = False
 
-        # on gère les captures
-        if enpass: # cas particulier : prise en passant
-            if self.side == WHITE:
-                self.bitboard[p] = self.pop_bit(self.bitboard[p], target+8)
-                self.occupancies[1] = self.pop_bit(self.occupancies[1], target+8) # on retire la piece de l'occupance global de la couleur attaquée
-                self.occupancies[2] = self.pop_bit(self.occupancies[2], target+8)
-                self.occupancies[2] = self.set_bit(self.occupancies[2], target)
-            else:
-                self.bitboard[P] = self.pop_bit(self.bitboard[P], target-8)
-                self.occupancies[0] = self.pop_bit(self.occupancies[0], target-8) # on retire la piece de l'occupance global de la couleur attaquée
-                self.occupancies[2] = self.pop_bit(self.occupancies[2], target-8)
-                self.occupancies[2] = self.set_bit(self.occupancies[2], target)
+            for i in range(fin):
+                if score_list[i] < score_list[i+1]:
+                    echange(i, i+1)
+                    is_echange = True
+            fin -= 1
+        return mv_list
 
-        if capture:
-            self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target) # on retire la piece de l'occupance global de la couleur attaquée
+    def enable_pv_scoring(self,move_list):
+        self.is_following_pv = False
 
-            for i in range((1-self.side)*6,(2-self.side)*6): # on parcours les pieces de la couleur adverse
-                if self.get_bit(self.bitboard[i], target):
-                    self.bitboard[i] = self.pop_bit(self.bitboard[i], target)
-                    break
-        else:
-            self.occupancies[2] = self.set_bit(self.occupancies[2], target) # il n'y avait pas de piece avant donc on doit l'ajouter
-
-        if double: # on défini la nouvelle case de en passant
-            self.en_passant = source + (-1 + 2*self.side)*8
-        else:
-            self.en_passant = -1
-
-        if roque: # on doit deplacer la tour et enlever le droit au roque
-            if target == G1:
-                self.bitboard[R] = self.set_bit(self.bitboard[R], F1)
-                self.bitboard[R] = self.pop_bit(self.bitboard[R], H1)
-                self.occupancies[0] = self.set_bit(self.occupancies[0], F1)
-                self.occupancies[0] = self.pop_bit(self.occupancies[0], H1)
-                self.occupancies[2] = self.set_bit(self.occupancies[2], F1)
-                self.occupancies[2] = self.pop_bit(self.occupancies[2], H1)
-                self.castle_right &= 0b1100
-            elif target == C1:
-                self.bitboard[R] = self.set_bit(self.bitboard[R], D1)
-                self.bitboard[R] = self.pop_bit(self.bitboard[R], A1)
-                self.occupancies[0] = self.set_bit(self.occupancies[0], D1)
-                self.occupancies[0] = self.pop_bit(self.occupancies[0], A1)
-                self.occupancies[2] = self.set_bit(self.occupancies[2], D1)
-                self.occupancies[2] = self.pop_bit(self.occupancies[2], A1)
-                self.castle_right &= 0b1100
-            elif target == G8:
-                self.bitboard[r] = self.set_bit(self.bitboard[r], F8)
-                self.bitboard[r] = self.pop_bit(self.bitboard[r], H8)
-                self.occupancies[1] = self.set_bit(self.occupancies[0], F8)
-                self.occupancies[1] = self.pop_bit(self.occupancies[0], H8)
-                self.occupancies[2] = self.set_bit(self.occupancies[2], F8)
-                self.occupancies[2] = self.pop_bit(self.occupancies[2], H8)
-                self.castle_right &= 0b0011
-            else:
-                self.bitboard[r] = self.set_bit(self.bitboard[r], D8)
-                self.bitboard[r] = self.pop_bit(self.bitboard[r], A8)
-                self.occupancies[1] = self.set_bit(self.occupancies[1], D8)
-                self.occupancies[1] = self.pop_bit(self.occupancies[1], A8)
-                self.occupancies[2] = self.set_bit(self.occupancies[2], D8)
-                self.occupancies[2] = self.pop_bit(self.occupancies[2], A8)
-                self.castle_right &= 0b0011
-        elif piece == K:
-            self.castle_right &= 0b1100
-        elif piece == k:
-            self.castle_right &= 0b0011
-
-        # on update les droits aux roques si une tour bouge ou si elle est capturée
-        if (piece == R and source == H1) or target == H1:
-            self.castle_right &= 0b1110
-        elif (piece == R and source == A1) or target == A1:
-            self.castle_right &= 0b1101
-        elif (piece == r and source == H8) or target == H8:
-            self.castle_right &= 0b1011
-        elif (piece == r and source == A8) or target == A8:
-            self.castle_right &= 0b0111
-
-        #on vérifie si le roi n'est pas en échec
-        if self.square_is_attacked(self.ls1b_index(self.bitboard[K+6*self.side]), 1^self.side):
-            self.undo_move(False)
-            return 0 # le coup est legal
-
-        # on finalise le coup
-        self.side ^= 1 # on change de coté
-        self.add_to_history()
-        return 1 # le coup est legal
+        for mv in move_list:
+            if mv.id == self.pv_table[0][self.ply].id:
+                self.is_score_pv = True
+                self.is_following_pv = True
 
 
+######################################################################################################
+########### TABLE DES TRANSPOSITIONS #################################################################
+######################################################################################################
 
-    ##########################################################################################
-    #### FONCTION D'EVALUATION ###############################################################
-    ##########################################################################################
+    def init_random_keys(self):
+        """ génère les clés pour la table de transposition """
+        cle_pot = cle_pot = rd.randint(0,ALL)
+        used_keys = []
 
-    def naive_eval(self):
-        """ fonction d'évaluation naive pour le debug (ne prend que la valeur des pieces en compte)"""
-        val = 0
         for piece in range(12):
-            bb = self.bitboard[piece]
-            while bb:
-                case = self.ls1b_index(bb)
-                bb = self.pop_bit(bb, case)
-                val += PIECE_VAL[piece]
+            for case in range(64):
+                while cle_pot in used_keys:
+                    cle_pot = rd.randint(0,ALL)
+                used_keys.append(cle_pot)
+                self.piece_keys[piece][case] = cle_pot
+        for case in range(64):
+            while cle_pot in used_keys:
+                cle_pot = rd.randint(0,ALL)
+            used_keys.append(cle_pot)
+            self.enpassant_keys[case] = cle_pot
+        for right in range(16):
+            while cle_pot in used_keys:
+                cle_pot = rd.randint(0,ALL)
+            used_keys.append(cle_pot)
+            self.castle_keys[right] = cle_pot
+        while cle_pot in used_keys:
+            cle_pot = rd.randint(0,ALL)
+        used_keys.append(cle_pot)
+        self.side_key = cle_pot
 
-        if self.side == WHITE:
-            return val
-        else:
-            return -val
 
-    def evaluation(self,absolute=True):
-        """ Renvoi l'évaluation de la position actuelle
-            absolute determine si on doit prendre la valeur opposée si ce sont les noirs qui jouent """
-
-        val = 0
+    def position_hash(self,board):
+        hash = 0
+        hash ^= self.castle_keys[board.castle_right]
+        if board.en_passant != -1:
+            hash ^= self.enpassant_keys[board.en_passant]
+        if board.side:
+            hash ^= self.side_key
         for piece in range(12):
-            bb = self.bitboard[piece]
+            bb = board.bitboard[piece]
             while bb:
-                case = self.ls1b_index(bb)
-                bb = self.pop_bit(bb, case)
-                val += PIECE_VAL[piece]
-                if piece < 6: # piece blanche
-                    val += POS_SCORE[piece][case]
-                else:
-                    val -= POS_SCORE[piece-6][MIRROR_CASE[case]]
-
-        if absolute or self.side == WHITE:
-            return val
-        else:
-            return -val
-
-
-    ############################################################################
-    #### CONNECTIONS A L'INTERFACE #############################################
-    ############################################################################
-
-    def trad_move(self,string):
-        """ traduit le coup pour pouvoir l'utiliser """
-        move_list = self.legal_move_generation(self.side)
-
-        source = CASES.index(string[0:2].lower())
-        target = CASES.index(string[2:4].lower())
-        prom = string[4]
-        if self.side == WHITE:
-            promotion = PIECE_LETTER.index(prom.upper())
-        else:
-            promotion = PIECE_LETTER.index(prom.lower())
-        for move in move_list:
-            if source == move.source and target == move.target and promotion == move.promotion:
-                return move
-        # le coup est incorrect ou laisse le roi en echec
-        return -1
-
-    ###################################################################################
-    # MAGIC NUMBER ####################################################################
-    ##################################################################################
-
-    def set_occupancy(self, index, bits_in_mask, attack_mask):
-        """ renvoi un bitboard de l'attack_mask auquel on a enlevé quelques cases en fonction de l'index """
-        occupancy = 0
-        attack_map = attack_mask
-
-        for i in range(bits_in_mask):
-            square = Board.ls1b_index(attack_map)
-            attack_map = Board.pop_bit(attack_map, square)
-
-            if index & (1 << i):
-                occupancy = occupancy | (1 << square)
-
-        return occupancy
-
-
-
-    def find_magic_number(self, square, relevant_bits, isbishop):
-        """ génère un magic number correct par force brute"""
-
-        occupancies = [0 for _ in range(4096)]
-        attacks = [0 for _ in range(4096)]
-
-        attack_mask = 0
-        if isbishop:
-            attack_mask = self.mask_bishop_attack(square)
-        else:
-            attack_mask = self.mask_rook_attack(square)
-
-        occupancy_index = 1 << relevant_bits
-        for i in range(occupancy_index):
-            occupancies[i] = self.set_occupancy(i, relevant_bits, attack_mask)
-
-            if isbishop:
-                attacks[i] = self.bishop_attack_on_the_fly(
-                    square, occupancies[i])
-            else:
-                attacks[i] = self.rook_attack_on_the_fly(
-                    square, occupancies[i])
-        # test de possible magic number
-        for rdcount in range(10000000): #100000000
-            magic_number = generate_magic_number()
-
-            # on passe les mauvais magic number sûr
-            if self.count_bit((attack_mask * magic_number) & 18374686479671623680) < 6:
-                continue
-
-            used_attacks = [0 for _ in range(4096)]
-
-            index = 0
-            fail = False
-            while index < occupancy_index and not fail:
-                magic_index = ((occupancies[index] * magic_number)&ALL) >> (64-relevant_bits)
-                # print("magic_index : %s"%magic_index)
-                if used_attacks[magic_index] == 0:
-                    used_attacks[magic_index] = attacks[index]
-                # le magic number ne marche pas !
-                elif used_attacks[magic_index] != attacks[index]:
-                    fail = True
-                index += 1
-
-            if not fail:  # le nombre est bien un magic number !
-                return magic_number
-
-        print('magic number non trouvé !')
-        return 0
-
-
-    def init_magic_numbers(self):
-        """ initialise les magic numbers pour chaque pièces et chaque cases """
-
-        # self.bishop_magic_numbers = []
-        # self.rook_magic_numbers = []
-        #
-        # for case in range(64):
-        #     #magic number pour le fou
-        #     self.bishop_magic_numbers.append(self.find_magic_number(case, BISHOP_RELEVANT_BITS[case], True))
-        #     print("%s,"%self.bishop_magic_numbers[case])
-        # print('\n ------------------------- \n -------------------------------- \n')
-        # for case in range(64):
-        #     #magic number pour la tour
-        #     self.rook_magic_numbers.append(self.find_magic_number(case, ROOK_RELEVANT_BITS[case], False))
-        #     print("%s,"%self.rook_magic_numbers[case])
-        #
-        # print(len(self.bishop_magic_numbers),len(self.rook_magic_numbers))
-
-        self.bishop_magic_numbers = [
-        1189799142386565152,
-        20345365374976064,
-        4508136459208704,
-        1154052910864269316,
-        55257331318916480,
-        11718509236722870289,
-        9223464473678906563,
-        10152924764701824,
-        437429843567607953,
-        9223389912643469352,
-        74599674589347968,
-        708103213547664,
-        4415763253410,
-        1157443802912292872,
-        108087492852320258,
-        17768833884160,
-        2396477969708227072,
-        2486552160532440064,
-        308496643198554144,
-        158189074895605761,
-        1126044125890644,
-        94716333966540802,
-        437412253529081860,
-        2315272429558598176,
-        1191237291230888192,
-        238708442314051712,
-        10382081371341340688,
-        18018797684326432,
-        4756368555073634816,
-        72341268051006466,
-        290483275753883668,
-        546101313325367832,
-        1128134502060192,
-        9232959932887728416,
-        577023908419600513,
-        11529813214753784070,
-        598701261324320,
-        3557852502789491712,
-        2452922694312788480,
-        19153493092761760,
-        4648286579746440770,
-        10276041578909872,
-        13835906886865650180,
-        299342313310725,
-        9234635502831799296,
-        15064575940176691456,
-        5246835957272971012,
-        5192654769482891396,
-        576602057266463264,
-        200551505043918978,
-        154652917760,
-        9148006570000386,
-        14126688534245163524,
-        4899951615494595328,
-        18157344218218496,
-        217299798729035778,
-        2595763351934222850,
-        729904336683960368,
-        648664170149187586,
-        36172835462447648,
-        654436607802344587,
-        306245359063015554,
-        3535343437245104256,
-        565303796990464
-        ]
-        self.rook_magic_numbers = [
-        1188950861045339168,
-        18014467231055936,
-        8394744890059262080,
-        2341889398553052288,
-        4647717564292532224,
-        1188951409727635584,
-        9367489423962342408,
-        144121815212508292,
-        140738033631236,
-        1153203121321672840,
-        576742296536547392,
-        9512869084762473601,
-        141287311280128,
-        2814819091092992,
-        3377983323636865,
-        146929955031238922,
-        53326318141576,
-        2310347984304349184,
-        9223514424415887360,
-        141287512606720,
-        9226469361383180288,
-        20408585179628544,
-        2305988144769667080,
-        288232575314694281,
-        36099180795887648,
-        721209268742656002,
-        17594335625344,
-        4614280868021666432,
-        9295711677100589072,
-        720580340581663232,
-        8813272957456,
-        1297037251028472068,
-        2882444773908545632,
-        90072269581197322,
-        580964523731584001,
-        5837828400542138384,
-        4613379268490037248,
-        4644345714050048,
-        9804513478944227864,
-        2882313108607472673,
-        598958984560640,
-        1306044167083802656,
-        4503737070584064,
-        2472486091299553312,
-        6989595417839173760,
-        577023736683823120,
-        11261198158856448,
-        1225053866518249481,
-        2359886480165306496,
-        2594399473241227520,
-        648659771059077760,
-        4634204085417967744,
-        2306423568667312384,
-        1154049605684691072,
-        3035428416607749120,
-        9585441783404349952,
-        324841919788155010,
-        12971002582314058242,
-        6016528702032129,
-        9223407255654760705,
-        9377058611157012482,
-        2533310290985537,
-        299110133924004,
-        108122126260700178
-        ]
+                case = board.ls1b(bb)
+                bb = board.pop_bit(bb)
+                hash ^= self.piece_keys[piece][case]
+        return hash
