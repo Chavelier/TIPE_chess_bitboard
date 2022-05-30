@@ -325,7 +325,7 @@ class Board:
             txt += PIECE_LETTER[piece].upper()
             l,temp = valid_moves,''
             for move_temp in l:
-                if move_temp.target == case_arrivee and (move_temp != move):
+                if move_temp.target == case_arrivee and (move_temp.id != move.id):
                     if move_temp.piece == piece:
                         case_depart_temp = move_temp.source
                         if case_depart_temp//8 == case_depart//8:

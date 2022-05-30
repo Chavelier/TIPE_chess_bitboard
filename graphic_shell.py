@@ -13,6 +13,7 @@ INTERFACE GRAPHIQUE
 
 import pygame as py
 import board
+import engine
 import time
 import sys
 import math
@@ -74,10 +75,14 @@ def liste_to_move(l):
 
 
 """FONCTIONS D'AFFICHAGE"""
-def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False,history=[]):
+def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,reverse,depth=4,PGN=False,FEN=False,history=[]):
     """Tourne en boucle et actualise le board en fonction des entrées de l'utilisateur"""
 
+    print(nbjoueur)
+
     B = board.Board()
+    cervo = engine.Engine()
+
     side = WHITE
     if FEN:
         B.set_fen(fen_board)
@@ -121,12 +126,13 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False,hi
                         player_clicks.append(sq_selected) #On append de la même manière pour le premier et deuxième clic
                     if len(player_clicks) == 2: #Après le 2nd click
                         coup = liste_to_move(player_clicks)
+                        print(coup)
                         if len(coup) == 4:
                             coup += " "
                         mv = B.trad_move(coup)
                         if mv != -1:
                             val_move = B.make_move(mv)
-                            print(openfinals.find_book_moves(B.get_fen()))
+                            #print(openfinals.find_book_moves(B.get_fen()))
                             #print(openfinals.find_endgame_pos_val(None))
                             if val_move == 1:
                                 move_made,animate = True,True
@@ -149,12 +155,15 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,depth=4,PGN=False,FEN=False,hi
                     B.init()
                     valid_moves,sq_selected,player_clicks,pgn_history = B.legal_move_generation(WHITE),(),[],[]
                     move_made,animate = False,False
+                if e.key == py.K_SPACE:
+                    val_move = B.make_move(cervo.bot_move(depth,B))
+
 
         if move_made:
             if animate:
-                animate_move(mv,screen,B,clock,coordFont)
+                animate_move(mv,screen,B,clock,coordFont,reverse)
                 valid_moves,move_made,animate = B.legal_move_generation(B.side),False,False
-        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,[eval_bar_flag] + [round(B.evaluation()/100,1)]) #TODO board.eval
+        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,[eval_bar_flag] + [round(B.evaluation()/100,1)],reverse)
         draw_menu_buttons(screen,eval_bar_flag,depth,B,history)
         clock.tick(MAX_FPS)
         py.display.flip()
@@ -188,7 +197,7 @@ def highlight_squares(screen,B,valid_moves,sq_selected):
             py.draw.circle(screen,color,(64*end_col+32,64*end_row +32),12,12)
 
 
-def draw_board(screen,font):
+def draw_board(screen,font,reverse):
     """Dessine l'échiquier (dont les numéros des cases)"""
 
     #colors = [p.Color("White"),vertSapin]
@@ -196,14 +205,25 @@ def draw_board(screen,font):
         for c in range(DIMENSION):
             color,case = colors[((r+c)%2)],py.Rect(c*SQ_SIZE,r*SQ_SIZE, SQ_SIZE,SQ_SIZE) #Petite astuce mathématique !
             py.draw.rect(screen,color,case)
-            if r == 7:
-                text = colsToFiles[c]
-                text_object,text_location = font.render(text,True,colors[((r+c)%2)-1]),case.move(SQ_SIZE-10,SQ_SIZE-13) #Comme ca ca décale
-                screen.blit(text_object,text_location)
-            if c == 0:
-                text = str(DIMENSION-r)
-                text_object,text_location = font.render(text,True,colors[((r+c)%2)-1]),case.move(3,2) #Comme ca ca décale
-                screen.blit(text_object,text_location)
+            if reverse:
+                if r == 7:
+                    text = colsToFiles[8-c-1]
+                    text_object,text_location = font.render(text,True,colors[((r+c)%2)-1]),case.move(SQ_SIZE-10,SQ_SIZE-13) #Comme ca ca décale
+                    screen.blit(text_object,text_location)
+                if c == 0:
+                    text = str(r+1)
+                    text_object,text_location = font.render(text,True,colors[((r+c)%2)-1]),case.move(3,2) #Comme ca ca décale
+                    screen.blit(text_object,text_location)
+            else:
+                if r == 7:
+                    text = colsToFiles[c]
+                    text_object,text_location = font.render(text,True,colors[((r+c)%2)-1]),case.move(SQ_SIZE-10,SQ_SIZE-13) #Comme ca ca décale
+                    screen.blit(text_object,text_location)
+                if c == 0:
+                    text = str(DIMENSION-r)
+                    text_object,text_location = font.render(text,True,colors[((r+c)%2)-1]),case.move(3,2) #Comme ca ca décale
+                    screen.blit(text_object,text_location)
+
 
 
 def draw_pieces(screen,B):
@@ -219,7 +239,7 @@ def draw_pieces(screen,B):
                 screen.blit(IMAGES[piece],py.Rect(c*SQ_SIZE,r*SQ_SIZE, SQ_SIZE,SQ_SIZE))
 
 
-def animate_move(move,screen,B,clock,font): #C'est pas le plus opti mais oklm ça fonctionne que 1s
+def animate_move(move,screen,B,clock,font,reverse): #C'est pas le plus opti mais oklm ça fonctionne que 1s
     """Anime l'échiquier et déplace la pièce"""
 
     start_case,end_case = CASES[move.source],CASES[move.target]
@@ -232,7 +252,7 @@ def animate_move(move,screen,B,clock,font): #C'est pas le plus opti mais oklm ç
 
     for frame in range(frame_count + 1):
         row,col = (start_row + dR*frame/frame_count,start_col + dC*frame/frame_count)
-        draw_board(screen,font)
+        draw_board(screen,font,reverse)
         draw_pieces(screen,B)
         color,end_square = colors[(end_row + end_col)%2],py.Rect(end_col*SQ_SIZE,end_row*SQ_SIZE,SQ_SIZE,SQ_SIZE)
         py.draw.rect(screen,color,end_square)
@@ -247,12 +267,12 @@ def animate_move(move,screen,B,clock,font): #C'est pas le plus opti mais oklm ç
         clock.tick(480)
 
 
-def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,bar):
+def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,bar,reverse):
     """Trace le board et les pièces en fonction de l'état du jeu"""
 
     if bar[0]:
         draw_bar(screen,bar[1],coordFont)
-    draw_board(screen,coordFont)
+    draw_board(screen,coordFont,reverse)
     if sq_selected != ():
         highlight_squares(screen,B,valid_moves,sq_selected)
     case = B.ls1b_index(B.bitboard[K+B.side*6])
@@ -261,7 +281,6 @@ def draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_h
         screen.blit(RED_CASE_CHECK,(col*SQ_SIZE,row*SQ_SIZE))
     draw_pieces(screen,B)
     draw_move_log(screen,moveLogFont,pgn_history,bar[0])
-    #draw_move_log(screen,moveLogFont,[CASES[i%64] for i in range(200)],bar[0])
 
 
 
@@ -450,7 +469,73 @@ def options_in_game(eval_bar_flag0,depth0,B,pgn_history):
 
         py.display.update()
 
-def options(eval_bar_flag0,nbjoueurs0,depth0):
+def options1(eval_bar_flag0,nbjoueurs0,depth0,reverse0):
+    """Menu des options
+    Liste des options : - Jeu à deux ou contre l'ordi : 1 joueur / 2 joueurs
+                        - Profondeur : [|1:10|] sous forme de curseur sur une barre
+                        - Partie depuis fenboard : [case pour mettre la fenboard] / bouton charger
+                        - Barre d'éval ou non : Oui / Non
+                        - Retour"""
+
+    flag = True
+    largeur = FINAL_WIDTH
+    hauteur = HEIGHT
+    eval_bar_flag = eval_bar_flag0
+    nbjoueurs = nbjoueurs0
+    depth = depth0
+    reverse = reverse0
+
+
+    def get_font(size):
+        return py.font.Font("assets/vcr.ttf", size)
+
+    while flag:
+        screen.blit(BACKGROUND, (0, 0))
+        MENU_MOUSE_POS = py.mouse.get_pos()
+        button_list = []
+        texts_button_list = ["Joueur(s): " + str(nbjoueurs),"IA depth: " + str(depth),"Eval: " + str(eval_bar_flag),
+                            "FEN / PGN","Retour"]
+
+
+
+        button_list.append(Button(image=py.image.load("assets/midrect.png"), pos=(largeur//4 + 10, 50),
+                            text_input="Joueur(s): " + str(nbjoueurs), font=get_font(35), base_color="#d4e6fc", hovering_color="White"))
+        button_list.append(Button(image=py.image.load("assets/midrect.png"), pos=(largeur*0.75 + 10, 50),
+                            text_input="Noirs: " + str(reverse), font=get_font(35), base_color="#d4e6fc", hovering_color="White"))
+
+        for i in range(1,len(texts_button_list)):
+            button_list.append(Button(image=py.image.load("assets/midrect.png"), pos=(largeur//2 + 10, 50 + 100*i),
+                                text_input=texts_button_list[i], font=get_font(35), base_color="#d4e6fc", hovering_color="White"))
+
+
+        for button in button_list:
+            button.changeColor(MENU_MOUSE_POS)
+            button.update(screen)
+
+        for event in py.event.get():
+            if event.type == py.QUIT:
+                py.quit()
+                sys.exit()
+            if event.type == py.MOUSEBUTTONDOWN:
+                if button_list[0].checkForInput(MENU_MOUSE_POS):
+                    nbjoueurs=2
+                    return options2(eval_bar_flag,nbjoueurs,depth)
+                if button_list[1].checkForInput(MENU_MOUSE_POS):
+                    reverse = not(reverse)
+                if button_list[2].checkForInput(MENU_MOUSE_POS):
+                    depth = 1+(depth%7)
+                if button_list[3].checkForInput(MENU_MOUSE_POS):
+                    eval_bar_flag = not(eval_bar_flag)
+                if button_list[4].checkForInput(MENU_MOUSE_POS):
+                    PGN,FEN,CTRLV = pgn_or_fen()
+                    run(eval_bar_flag,nbjoueurs,CTRLV,CTRLV,depth,PGN,FEN)
+                if button_list[5].checkForInput(MENU_MOUSE_POS):
+                    return eval_bar_flag,nbjoueurs,depth,reverse
+
+        py.display.update()
+
+
+def options2(eval_bar_flag0,nbjoueurs0,depth0):
     """Menu des options
     Liste des options : - Jeu à deux ou contre l'ordi : 1 joueur / 2 joueurs
                         - Profondeur : [|1:10|] sous forme de curseur sur une barre
@@ -491,16 +576,17 @@ def options(eval_bar_flag0,nbjoueurs0,depth0):
                 sys.exit()
             if event.type == py.MOUSEBUTTONDOWN:
                 if button_list[0].checkForInput(MENU_MOUSE_POS):
-                    nbjoueurs = 1+(nbjoueurs%2)
+                    nbjoueurs=1
+                    return options1(eval_bar_flag,nbjoueurs,depth,False)
                 if button_list[1].checkForInput(MENU_MOUSE_POS):
                     depth = 1+(depth%7)
                 if button_list[2].checkForInput(MENU_MOUSE_POS):
                     eval_bar_flag = not(eval_bar_flag)
                 if button_list[3].checkForInput(MENU_MOUSE_POS):
                     PGN,FEN,CTRLV = pgn_or_fen()
-                    run(eval_bar_flag,nbjoueurs,CTRLV,CTRLV,depth,PGN,FEN)
+                    run(eval_bar_flag,nbjoueurs,CTRLV,CTRLV,False,depth,PGN,FEN)
                 if button_list[4].checkForInput(MENU_MOUSE_POS):
-                    return eval_bar_flag,nbjoueurs,depth
+                    return eval_bar_flag,nbjoueurs,depth,False
 
         py.display.update()
 
@@ -514,6 +600,7 @@ def main():
     eval_bar_flag = True #VALEUR DE BASE
     nbjoueurs = 1 #VALEUR DE BASE
     depth = 4 #VALEUR DE BASE
+    reverse = False #VALEUR DE BASE
 
     def get_font(size):
         #return py.font.SysFont("Montserrat",size,False,False)
@@ -541,9 +628,9 @@ def main():
             if event.type == py.MOUSEBUTTONDOWN:
                 if PLAY_BUTTON.checkForInput(MENU_MOUSE_POS):
                     flag = False
-                    run(eval_bar_flag,nbjoueurs,'','',depth)
+                    run(eval_bar_flag,nbjoueurs,'','',reverse,depth)
                 if OPTIONS_BUTTON.checkForInput(MENU_MOUSE_POS):
-                    eval_bar_flag,nbjoueurs,depth = options(eval_bar_flag,nbjoueurs,depth)
+                    eval_bar_flag,nbjoueurs,depth,reverse = options1(eval_bar_flag,nbjoueurs,depth,reverse)
                 if QUIT_BUTTON.checkForInput(MENU_MOUSE_POS):
                     py.quit()
                     sys.exit()
