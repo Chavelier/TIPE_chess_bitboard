@@ -26,10 +26,11 @@ class Move:
         self.castling = castling
         self.id = self.source | (self.target << 6) | (self.piece << 12) | (self.promotion << 16) | (self.capture << 20) | (self.double << 21) | (self.enpassant << 22) | (self.castling << 23)
 
-    def txt(self,piece=True):
+    def txt(self,f=True):
         mv = ""
-        if piece: mv += PIECE_LETTER[self.piece]+"_"
-        mv = CASES[self.source]+CASES[self.target]+PIECE_LETTER[self.promotion].lower()
+        if f:
+            mv += PIECE_LETTER[self.piece]+"_"
+        mv += CASES[self.source]+CASES[self.target]+PIECE_LETTER[self.promotion].lower()
         return mv
 
 
