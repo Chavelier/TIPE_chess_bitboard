@@ -22,14 +22,10 @@ class Engine:
 
     def __init__(self):
         self.ply = 0 # compteur de la profondeur (en demi coups)
+        self.transposition = {} # table des transpositions de la forme { clef : (depth, value, flag, best move) }
         self.clear_variables()
 
-        # hash variables
-        self.piece_keys = [[0 for _ in range(64)] for _ in range(12)]
-        self.enpassant_keys = [0 for _ in range(64)]
-        self.castle_keys = [0 for _ in range(16)]
-        self.side_key = 0
-        self.init_random_keys()
+
 
 
     def clear_variables(self):
@@ -51,69 +47,70 @@ class Engine:
         self.clear_variables()
 
 
-        # recherche en profondeur itérative
-        temps_tot = 0
-        alpha = -50000
-        beta = 50000
-        print("Profondeur    Noeuds    Profondeur maximale    Temps    Principale variation\n")
-        for current_depth in range(1,depth+1):
-            self.is_following_pv = True
-            # statistiques sur l'ia
-            self.nodes = 0 # compteur des noeuds visités
-            self.max_depth = 0
+        # # recherche en profondeur itérative
+        # temps_tot = 0
+        # alpha = -50000
+        # beta = 50000
+        # print("Profondeur    Noeuds    Profondeur maximale    Temps    Principale variation\n")
+        # for current_depth in range(1,depth+1):
+        #     self.is_following_pv = True
+        #     # statistiques sur l'ia
+        #     self.nodes = 0 # compteur des noeuds visités
+        #     self.max_depth = 0
+        #
+        #     tic = time.time()
+        #
+        #     score = self.alphabeta(alpha,beta,current_depth,board)
+        #     if score <= alpha or score >= beta:
+        #         alpha = -50000
+        #         beta = 50000
+        #         print("erreur de fenêtre")
+        #         score = self.alphabeta(alpha,beta,current_depth,board)
+        #         # voir si on a besoin de calculer cette valeur ou si on peut continue
+        #     else:
+        #         alpha = score-ASPIRATION_WINDOW
+        #         beta = score+ASPIRATION_WINDOW
+        #
+        #     tac = time.time()
+        #     temps = tac - tic
+        #     temps_tot += temps
+        #
+        #     pv = ""
+        #     for i in range(self.pv_length[0]):
+        #         move = self.pv_table[0][i]
+        #         pv += move.txt(True)+" "
+        #     ligne = " "*9+str(current_depth)
+        #     ligne += " "*(10-len(str(self.nodes)))+str(self.nodes)
+        #     ligne += " "*(23-len(str(self.max_depth)))+str(self.max_depth)
+        #     ligne +=" "*(8-len(str(round(time.time()-tic,2))))+str(round(temps,2))+"s"
+        #     ligne += " "*4+pv
+        #     print(ligne)
+        # print("\nScore calculé : %s"%score)
+        # print("Temps total : %ss\n\n\n"%round(temps_tot,3))
 
-            tic = time.time()
 
-            score = self.alphabeta(alpha,beta,current_depth,board)
-            if score <= alpha or score >= beta:
-                alpha = -50000
-                beta = 50000
-                print("erreur de fenêtre")
-                score = self.alphabeta(alpha,beta,current_depth,board)
-                # voir si on a besoin de calculer cette valeur ou si on peut continue
-            else:
-                alpha = score-ASPIRATION_WINDOW
-                beta = score+ASPIRATION_WINDOW
+        # efficacité iteration comparaison
+        self.clear_variables()
+        # statistiques sur l'ia
+        self.nodes = 0 # compteur des noeuds visités
+        self.max_depth = 0
+        # tri PV variables
+        self.is_following_pv = False
+        self.is_score_pv = False
 
-            tac = time.time()
-            temps = tac - tic
-            temps_tot += temps
+        tic = time.time()
+        score = self.alphabeta(-50000,50000,depth,board)
+        pv = ""
+        for i in range(self.pv_length[0]):
+            move = self.pv_table[0][i]
+            pv += move.txt()+" "
+        print("Principale variation : %s"%pv)
+        print("Score calculé : %s"%score)
+        print("Noeuds visités : %s"%self.nodes)
+        print("Profondeur maximale atteinte : %s"%self.max_depth)
+        print("Temps de calcul : %ss"%(time.time()-tic))
 
-            pv = ""
-            for i in range(self.pv_length[0]):
-                move = self.pv_table[0][i]
-                pv += move.txt(True)+" "
-            ligne = " "*9+str(current_depth)
-            ligne += " "*(10-len(str(self.nodes)))+str(self.nodes)
-            ligne += " "*(23-len(str(self.max_depth)))+str(self.max_depth)
-            ligne +=" "*(8-len(str(round(time.time()-tic,2))))+str(round(temps,2))+"s"
-            ligne += " "*4+pv
-            print(ligne)
-        print("\nScore calculé : %s"%score)
-        print("Temps total : %ss\n\n\n"%round(temps_tot,3))
-
-
-        # # efficacité iteration comparaison
-        # self.clear_variables()
-        # # statistiques sur l'ia
-        # self.nodes = 0 # compteur des noeuds visités
-        # self.max_depth = 0
-        # # tri PV variables
-        # self.is_following_pv = False
-        # self.is_score_pv = False
-        
-        # tic = time.time()
-        # score = self.alphabeta(-50000,50000,depth,board)
-        # pv = ""
-        # for i in range(self.pv_length[0]):
-        #     move = self.pv_table[0][i]
-        #     pv += move.txt()+" "
-        # print("Principale variation : %s"%pv)
-        # print("Score calculé : %s"%score)
-        # print("Noeuds visités : %s"%self.nodes)
-        # print("Profondeur maximale atteinte : %s"%self.max_depth)
-        # print("Temps de calcul : %ss"%(time.time()-tic))
-
+        print("taille de la table de transpositions : %s"%len(self.transposition))
         return self.pv_table[0][0]
 
 
@@ -122,6 +119,12 @@ class Engine:
         """ algorithme de recherche du meilleur coup """
 
         self.pv_length[self.ply] = self.ply # a voir si on peut pas écrire ça dans bot move
+
+        hash = board.hash_hist[-1]
+        hash_flag = 1 # on initialise à alpha flag
+        transpo_val = self.get_transpo(hash, depth, alpha, beta)
+        if self.ply and transpo_val != None:
+            return transpo_val
 
         if depth == 0:
             # return board.naive_eval()
@@ -138,11 +141,12 @@ class Engine:
         is_legal_move = False
 
         # élagage par coup nul
-        # attention au zugzang ! (mais c en finale et en finale on a un autre systeme)
+        # attention au zugzang ! (on peut par exemple vérifier qu'il reste autre chose que roi pion et cavalier)
         if depth >= 3 and self.ply and not in_check:
             board.side ^= 1 # on change le côté qui joue (on donne littéralement un coup en plus)
             board.en_passant = -1 # on le réinitialise pour éviter des coups etranges
             board.add_to_history() # on ajoute cette étrange position à l'historique afin de pouvoir appliquer l'algorithme dessus
+            board.hash_hist.append(board.position_hash()) # on recrer depuis le début la postion en hashing
             score = -self.alphabeta(-beta, -beta+1, depth-3, board) # on regarde simplement si il existe un "bon coup" pour l'autre cote a une profondeur réduite
             board.undo_move(True)
             if score >= beta: # il n'en existe pas
@@ -166,6 +170,7 @@ class Engine:
             #### DETERMINATION DU SCORE ####
             if moves_searched == 0: # on fait une recherche normale
                 score = -self.alphabeta(-beta,-alpha,depth-1,board)
+                # self.transposition[hash] = (depth,score)
             else: # Late Move Reduction (LMR)
                 if moves_searched >= FULL_DEPTH_MOVES and depth >= REDUCTION_LIMIT and not in_check and not mv.capture and mv.promotion == NO_PIECE: # condition pour considerer la LMR
                     score = -self.alphabeta(-alpha-1, -alpha, depth-2, board)
@@ -175,6 +180,8 @@ class Engine:
                     score = -self.alphabeta(-alpha-1,-alpha,depth-1,board) # on recherche en supposant que tous les coups restants sont moins bons
                     if score > alpha and score < beta: # on s'est trompé il existe, un meilleur coup, on a perdu du temps mais globalement c'est plus efficace
                         score = -self.alphabeta(-beta,-alpha,depth-1,board)
+                        # self.transposition[hash] = (depth,score)
+
             #### FIN DETERMINATION DU SCORE ####
 
 
@@ -183,6 +190,8 @@ class Engine:
             moves_searched += 1
 
             if score >= beta: # fail high-> on coupe cette partie
+                self.transposition[hash] = (depth,beta,2) # on enregistre la position avec le flag beta
+
                 if not mv.capture: # on n'enregistre seulement les coups discrets
                     self.killer_moves[1][self.ply] = self.killer_moves[0][self.ply] # on garde en mémoire l'ancien killer move
                     self.killer_moves[0][self.ply] = mv # on enregistre le killer move
@@ -190,6 +199,7 @@ class Engine:
                 return beta
 
             if score > alpha: #on a trouvé un meilleur coup, on est donc dans la variation principale
+                hash_flag = 0 # on change le flag car c un coup exact
                 if not mv.capture: # on n'enregistre seulement les coups discrets
                     self.history_moves[mv.piece][mv.target] += depth # enlève des noeuds mais pas l'impression que ça accélère
 
@@ -207,6 +217,8 @@ class Engine:
                 return -49000+self.ply # si echec alors il y a mat (le + self.ply assure le mat le plus court)
             else:
                 return 0 # sinon c'est pat
+
+        self.transposition[hash] = (depth,alpha,hash_flag)
 
         return alpha
 
@@ -319,48 +331,16 @@ class Engine:
                 self.is_following_pv = True
 
 
-######################################################################################################
-########### TABLE DES TRANSPOSITIONS #################################################################
-######################################################################################################
 
-    def init_random_keys(self):
-        """ génère les clés pour la table de transposition """
-        cle_pot = cle_pot = rd.randint(0,ALL)
-        used_keys = []
-
-        for piece in range(12):
-            for case in range(64):
-                while cle_pot in used_keys:
-                    cle_pot = rd.randint(0,ALL)
-                used_keys.append(cle_pot)
-                self.piece_keys[piece][case] = cle_pot
-        for case in range(64):
-            while cle_pot in used_keys:
-                cle_pot = rd.randint(0,ALL)
-            used_keys.append(cle_pot)
-            self.enpassant_keys[case] = cle_pot
-        for right in range(16):
-            while cle_pot in used_keys:
-                cle_pot = rd.randint(0,ALL)
-            used_keys.append(cle_pot)
-            self.castle_keys[right] = cle_pot
-        while cle_pot in used_keys:
-            cle_pot = rd.randint(0,ALL)
-        used_keys.append(cle_pot)
-        self.side_key = cle_pot
-
-
-    def position_hash(self,board):
-        hash = 0
-        hash ^= self.castle_keys[board.castle_right]
-        if board.en_passant != -1:
-            hash ^= self.enpassant_keys[board.en_passant]
-        if board.side:
-            hash ^= self.side_key
-        for piece in range(12):
-            bb = board.bitboard[piece]
-            while bb:
-                case = board.ls1b(bb)
-                bb = board.pop_bit(bb)
-                hash ^= self.piece_keys[piece][case]
-        return hash
+    # { clef : (depth, score, flag) }
+    def get_transpo(self,key,depth,alpha,beta):
+        if key in self.transposition:
+            val = self.transposition[key]
+            if val[0] >= depth:
+                if val[2] == 0: #coup exact
+                    return val[1]
+                if val[2] == 1 and val[1] <= alpha: # alpha flag
+                    return alpha
+                if val[2] == 2 and val[1] >= beta: # beta flag
+                    return beta
+        return None

@@ -37,10 +37,8 @@ class Move:
 class Board:
     """ Représentation de l'échéquier """
 
-    def __init__(self):
-        self.init()
 
-    def init(self):
+    def __init__(self):
         """ initialise l'échéquier """
 
         self.side = WHITE
@@ -87,6 +85,14 @@ class Board:
         self.usemagic = True # on utilise ou non le magic bitboard
         self.init_magic_numbers()
         self.init_slider_attack()
+
+        # ZOBRIST HASHING
+        self.piece_keys = [[0 for _ in range(64)] for _ in range(12)]
+        self.enpassant_keys = [0 for _ in range(64)] # on en aurait besoin que de 8 théoriquement (1 par colonne combinée avec le côté qui joue)
+        self.castle_keys = [0 for _ in range(16)]
+        self.side_key = 0
+        self.hash_hist = [self.position_hash()] # on initialise avec la position 1
+        self.init_random_keys()
 
 
 
@@ -258,6 +264,7 @@ class Board:
             somme += dico[s]
         self.castle_right = somme #droits au roque
         self.add_to_history()
+        self.hash_hist.append(self.position_hash()) # on ajoute la position de manière non incrémentale car on recrée une position de 0
 
     def get_fen(self):
         """Code la position en Notation Forsyth-Edwards"""
@@ -769,6 +776,7 @@ class Board:
         """ ajoute la position actuelle à l'historique """
         self.history.append((self.bitboard[:], self.occupancies[:], self.side, self.en_passant, self.castle_right))
 
+
     def history_debug(self):
         L = []
         id = -1
@@ -785,6 +793,7 @@ class Board:
         """ annule le dernier coup, si real_move = True alors on supprime d'abord la dernière entrée de l'historique sinon non """
         if real_move and len(self.history) >= 2:
             del self.history[-1]
+            del self.hash_hist[-1]
         (bb, occ, sd, enpass, castle) = self.history[-1]
         self.bitboard = bb[:]
         self.occupancies = occ[:]
@@ -798,6 +807,8 @@ class Board:
         if only_capture_flag and not move.capture:
             return 0 # on ne fait pas le coup
 
+        hash = self.hash_hist[-1] # on récupère le hash de la position avant le coup
+
         # on récupère les informations du coup
         source = move.source
         target = move.target
@@ -808,13 +819,17 @@ class Board:
         enpass = move.enpassant
         roque = move.castling
 
+
         # on déplace la pièce
         self.bitboard[piece] = self.pop_bit(self.bitboard[piece], source)
+        hash ^= self.piece_keys[piece][source] # on enlève la piece de la case de départ
 
         if promote != NO_PIECE: # si il y a une promotion
             self.bitboard[promote] = self.set_bit(self.bitboard[promote], target)
+            hash ^= self.piece_keys[promote][target] # on rajoute la promotion sur la case d'arrivée
         else:
             self.bitboard[piece] = self.set_bit(self.bitboard[piece], target)
+            hash ^= self.piece_keys[piece][target] # on rajoute la piece sur la case d'arrivée
 
         self.occupancies[self.side] = self.pop_bit(self.occupancies[self.side], source)
         self.occupancies[self.side] = self.set_bit(self.occupancies[self.side], target)
@@ -824,11 +839,15 @@ class Board:
         if enpass: # cas particulier : prise en passant
             if self.side == WHITE:
                 self.bitboard[p] = self.pop_bit(self.bitboard[p], target+8)
+                hash ^= self.piece_keys[p][target+8]
+
                 self.occupancies[1] = self.pop_bit(self.occupancies[1], target+8) # on retire la piece de l'occupance global de la couleur attaquée
                 self.occupancies[2] = self.pop_bit(self.occupancies[2], target+8)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], target)
             else:
                 self.bitboard[P] = self.pop_bit(self.bitboard[P], target-8)
+                hash ^= self.piece_keys[P][target-8]
+
                 self.occupancies[0] = self.pop_bit(self.occupancies[0], target-8) # on retire la piece de l'occupance global de la couleur attaquée
                 self.occupancies[2] = self.pop_bit(self.occupancies[2], target-8)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], target)
@@ -839,19 +858,26 @@ class Board:
             for i in range((1-self.side)*6,(2-self.side)*6): # on parcours les pieces de la couleur adverse
                 if self.get_bit(self.bitboard[i], target):
                     self.bitboard[i] = self.pop_bit(self.bitboard[i], target)
+                    hash ^= self.piece_keys[i][target] # on efface la piece capturée
                     break
         else:
             self.occupancies[2] = self.set_bit(self.occupancies[2], target) # il n'y avait pas de piece avant donc on doit l'ajouter
 
+
+        if self.en_passant != -1: hash ^= self.enpassant_keys[self.en_passant] # on enlève potentiellement la dernière case de en passant
         if double: # on défini la nouvelle case de en passant
             self.en_passant = source + (-1 + 2*self.side)*8
+            hash ^= self.enpassant_keys[self.en_passant] # on rajoute la case en passant dans le hash
         else:
             self.en_passant = -1
 
+        hash ^= self.castle_keys[self.castle_right] # on enlève l'ancien castle rigth
         if roque: # on doit deplacer la tour et enlever le droit au roque
             if target == G1:
                 self.bitboard[R] = self.set_bit(self.bitboard[R], F1)
+                hash ^= self.piece_keys[R][F1]
                 self.bitboard[R] = self.pop_bit(self.bitboard[R], H1)
+                hash ^= self.piece_keys[R][H1]
                 self.occupancies[0] = self.set_bit(self.occupancies[0], F1)
                 self.occupancies[0] = self.pop_bit(self.occupancies[0], H1)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], F1)
@@ -859,7 +885,9 @@ class Board:
                 self.castle_right &= 0b1100
             elif target == C1:
                 self.bitboard[R] = self.set_bit(self.bitboard[R], D1)
+                hash ^= self.piece_keys[R][D1]
                 self.bitboard[R] = self.pop_bit(self.bitboard[R], A1)
+                hash ^= self.piece_keys[R][A1]
                 self.occupancies[0] = self.set_bit(self.occupancies[0], D1)
                 self.occupancies[0] = self.pop_bit(self.occupancies[0], A1)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], D1)
@@ -867,7 +895,9 @@ class Board:
                 self.castle_right &= 0b1100
             elif target == G8:
                 self.bitboard[r] = self.set_bit(self.bitboard[r], F8)
+                hash ^= self.piece_keys[r][F8]
                 self.bitboard[r] = self.pop_bit(self.bitboard[r], H8)
+                hash ^= self.piece_keys[r][H8]
                 self.occupancies[1] = self.set_bit(self.occupancies[0], F8)
                 self.occupancies[1] = self.pop_bit(self.occupancies[0], H8)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], F8)
@@ -875,7 +905,9 @@ class Board:
                 self.castle_right &= 0b0011
             else:
                 self.bitboard[r] = self.set_bit(self.bitboard[r], D8)
+                hash ^= self.piece_keys[r][D8]
                 self.bitboard[r] = self.pop_bit(self.bitboard[r], A8)
+                hash ^= self.piece_keys[r][A8]
                 self.occupancies[1] = self.set_bit(self.occupancies[1], D8)
                 self.occupancies[1] = self.pop_bit(self.occupancies[1], A8)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], D8)
@@ -895,6 +927,7 @@ class Board:
             self.castle_right &= 0b1011
         elif (piece == r and source == A8) or target == A8:
             self.castle_right &= 0b0111
+        hash ^= self.castle_keys[self.castle_right] # on ajoute le nouveau castle right
 
         #on vérifie si le roi n'est pas en échec
         if self.square_is_attacked(self.ls1b_index(self.bitboard[K+6*self.side]), 1^self.side):
@@ -903,7 +936,16 @@ class Board:
 
         # on finalise le coup
         self.side ^= 1 # on change de coté
+        hash ^= self.side_key # on change de côté
+
         self.add_to_history()
+
+        self.hash_hist.append(self.position_hash()) # pas le plus oti mais le hashing incrémental marche pas pour l'instant
+        # self.hash_hist.append(hash) # on rajoute la nouvelle position à l'historique des hashs
+        # if hash != self.position_hash():
+        #     print("!!! erreur dans le hashing incrémental !!!")
+        #     print("coup : %s\n"%move.txt())
+
         return 1 # le coup est legal
 
 
@@ -1221,3 +1263,52 @@ class Board:
         299110133924004,
         108122126260700178
         ]
+
+    ##########################################################################################################################
+    ########### ZOBRIST HASHING ##############################################################################################
+    ##########################################################################################################################
+
+    """ !!! ATTENTION UNDO_MOVE MODIFIE HASH_HIST MAIS PAS ADD_TO_HISTORY (c'est make_move qui le fait) """
+
+    def init_random_keys(self):
+        """ génère les clés pour la table de transposition """
+        cle_pot = cle_pot = rd.randint(0,ALL)
+        used_keys = []
+
+        for piece in range(12):
+            for case in range(64):
+                while cle_pot in used_keys:
+                    cle_pot = rd.randint(0,ALL)
+                used_keys.append(cle_pot)
+                self.piece_keys[piece][case] = cle_pot
+        for case in range(64):
+            while cle_pot in used_keys:
+                cle_pot = rd.randint(0,ALL)
+            used_keys.append(cle_pot)
+            self.enpassant_keys[case] = cle_pot
+        for right in range(16):
+            while cle_pot in used_keys:
+                cle_pot = rd.randint(0,ALL)
+            used_keys.append(cle_pot)
+            self.castle_keys[right] = cle_pot
+        while cle_pot in used_keys:
+            cle_pot = rd.randint(0,ALL)
+        used_keys.append(cle_pot)
+        self.side_key = cle_pot
+
+
+    def position_hash(self):
+        """ génère un hash de la position à partir du départ """
+        hash = 0
+        hash ^= self.castle_keys[self.castle_right]
+        if self.en_passant != -1:
+            hash ^= self.enpassant_keys[self.en_passant]
+        if self.side:
+            hash ^= self.side_key
+        for piece in range(12):
+            bb = self.bitboard[piece]
+            while bb:
+                case = self.ls1b_index(bb)
+                bb = self.pop_bit(bb,case)
+                hash ^= self.piece_keys[piece][case]
+        return hash

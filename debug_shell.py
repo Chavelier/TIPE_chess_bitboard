@@ -70,7 +70,6 @@ while cmd not in ["q","quit","exit"]:
             coup += " "
         mv = board.trad_move(coup)
         if mv != -1:
-            print(board.score_move(mv))
             board.make_move(mv)
 
 
