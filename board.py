@@ -816,7 +816,6 @@ class Board:
 
         hash = self.hash_hist[-1] # on récupère le hash de la position avant le coup
 
-
         # on récupère les informations du coup
         source = move.source
         target = move.target

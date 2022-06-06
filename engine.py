@@ -38,6 +38,10 @@ class Engine:
 
     def bot_move(self,depth,board):
 
+        count = board.count_bit(board.occupancies[2]) #nb de piece restante
+        if count <= 5:
+            pass # mettre ici truc des finales
+
         # tri PV variables
         self.is_following_pv = False
         self.is_score_pv = False

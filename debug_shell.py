@@ -16,7 +16,7 @@ ascii_f = False
 board = Board()
 E = Engine()
 
-board.set_fen("2r3k1/R7/8/1R6/8/8/P4KPP/8 w - - 0 40 ")
+# board.set_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")
 
 def clear():
     print(100*"\n")
