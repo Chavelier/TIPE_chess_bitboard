@@ -14,11 +14,8 @@ MAIN
 # board = Board()
 # engine = Engine()
 #
-#
-# bb = rd.randint(0, ALL)
-# bb2 = rd.randint(0,ALL)
-#
-# board.print_bb(bb)
-# board.print_bb(bb2)
-# board.print_bb(bb^bb2)
-# board.print_bb((bb^bb2)^bb2)
+# board.set_fen("5P2/5P2/5P2/5P2/5P2/5P2/5P2/5P2 w - - 0 1")
+# board.print_bb(board.bitboard[P])
+
+L = [1,1,0,1,1,0,1,1]
+print(L.split(0))

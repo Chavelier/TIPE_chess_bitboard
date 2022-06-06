@@ -74,6 +74,10 @@ class Board:
         self.history = []
         self.history.append((self.bitboard[:], self.occupancies[:], self.side, self.en_passant, self.castle_right))
 
+        self.is_nulle = False
+        self.nulle_50_cpt = 0
+        self.nulle_3_rep = {}
+
         # tables d'attaques
         self.pawn_attack = [[], []]
         self.knight_attack = []
@@ -94,6 +98,7 @@ class Board:
         self.hash_hist = [self.position_hash()] # on initialise avec la position 1
         self.init_random_keys()
 
+        self.nulle_3_rep[self.hash_hist[-1]] = 1 # on rajoute la position de départ
 
 
     # fonctions sur les bits -----------------------------------------------------------------------
@@ -791,7 +796,9 @@ class Board:
 
     def undo_move(self, real_move):
         """ annule le dernier coup, si real_move = True alors on supprime d'abord la dernière entrée de l'historique sinon non """
+        self.is_nulle = False
         if real_move and len(self.history) >= 2:
+            self.nulle_3_rep[self.hash_hist[-1]] = max(self.nulle_3_rep[self.hash_hist[-1]]-1,0)
             del self.history[-1]
             del self.hash_hist[-1]
         (bb, occ, sd, enpass, castle) = self.history[-1]
@@ -804,10 +811,11 @@ class Board:
     def make_move(self, move, only_capture_flag=False):
         """ fait le coup et l'ajoute à l'historique """
 
-        if only_capture_flag and not move.capture:
+        if (only_capture_flag and not move.capture) or self.nulle_50_cpt >= 50 or self.is_nulle:
             return 0 # on ne fait pas le coup
 
         hash = self.hash_hist[-1] # on récupère le hash de la position avant le coup
+
 
         # on récupère les informations du coup
         source = move.source
@@ -819,6 +827,11 @@ class Board:
         enpass = move.enpassant
         roque = move.castling
 
+        cpt_sauv = self.nulle_50_cpt
+        if capture or piece in [P,p]:
+            self.nulle_50_cpt = 0
+        else:
+            self.nulle_50_cpt += 1 # on rajoute un coup au compteur
 
         # on déplace la pièce
         self.bitboard[piece] = self.pop_bit(self.bitboard[piece], source)
@@ -932,7 +945,8 @@ class Board:
         #on vérifie si le roi n'est pas en échec
         if self.square_is_attacked(self.ls1b_index(self.bitboard[K+6*self.side]), 1^self.side):
             self.undo_move(False)
-            return 0 # le coup est legal
+            self.nulle_50_cpt -= cpt_sauv
+            return 0 # le coup est illegal
 
         # on finalise le coup
         self.side ^= 1 # on change de coté
@@ -945,6 +959,12 @@ class Board:
         # if hash != self.position_hash():
         #     print("!!! erreur dans le hashing incrémental !!!")
         #     print("coup : %s\n"%move.txt())
+        if not self.hash_hist[-1] in self.nulle_3_rep:
+            self.nulle_3_rep[self.hash_hist[-1]] = 1
+        else:
+            self.nulle_3_rep[self.hash_hist[-1]] += 1
+            if self.nulle_3_rep[self.hash_hist[-1]] >= 3:
+                self.is_nulle = True
 
         return 1 # le coup est legal
 
@@ -1003,10 +1023,28 @@ class Board:
 
 
         val = 0
-        nb_fou = 0
+        foub = 0
+        foun = 0
+        piece_restantes = 0
+
+        white_pawn_struct = []
+        black_pawn_struct = []
+        for col in range(8):
+            white_pawn_struct.append(self.count_bit(FILE[col]&self.bitboard[P]))
+            black_pawn_struct.append(self.count_bit(FILE[col]&self.bitboard[p]))
+
+        for nb in white_pawn_struct:
+            if nb >= 2:
+                val -= 10*nb
+        for nb in black_pawn_struct:
+            if nb >= 2:
+                val += 10*nb
+
+
         for piece in range(12):
             bb = self.bitboard[piece]
             while bb:
+                piece_restantes += 1
                 case = self.ls1b_index(bb)
                 bb = self.pop_bit(bb, case)
                 val += PIECE_VAL[piece]
@@ -1014,6 +1052,30 @@ class Board:
                     val += POS_SCORE[piece][case]
                 else:
                     val -= POS_SCORE[piece-6][MIRROR_CASE[case]]
+
+                if piece == B: # gérer les paires de fou
+                    foub += 1
+                elif piece == b:
+                    foun += 1
+                elif piece == R:
+                    if not white_pawn_struct[case % 8]: # si il n'y a pas de pion blanc sur la colonne
+                        val += 30
+                        if not black_pawn_struct[case % 8]:
+                            val += 20
+                elif piece == r:
+                    if not black_pawn_struct[case % 8]: # si il n'y a pas de pion blanc sur la colonne
+                        val -= 30
+                        if not white_pawn_struct[case % 8]:
+                            val -= 20
+                elif piece == K and not white_pawn_struct[case % 8]: # roi sur colonne ouverte
+                    val -= 150
+                elif piece == k and not black_pawn_struct[case % 8]: # roi sur colonne ouverte
+                    val += 150
+
+        if foub >= 2:
+            val += 40
+        if foun >= 2:
+            val -= 40
 
         if absolute or self.side == WHITE:
             return val
@@ -1028,6 +1090,8 @@ class Board:
     def trad_move(self,string):
         """ traduit le coup pour pouvoir l'utiliser """
         move_list = self.legal_move_generation(self.side)
+        if move_list == []:
+            print("nulle ou mat !")
 
         source = CASES.index(string[0:2].lower())
         target = CASES.index(string[2:4].lower())

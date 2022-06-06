@@ -110,7 +110,7 @@ class Engine:
         print("Profondeur maximale atteinte : %s"%self.max_depth)
         print("Temps de calcul : %ss"%(time.time()-tic))
 
-        print("taille de la table de transpositions : %s"%len(self.transposition))
+        print("taille de la table de transpositions : %s\n\n"%len(self.transposition))
         return self.pv_table[0][0]
 
 
@@ -142,11 +142,16 @@ class Engine:
 
         # élagage par coup nul
         # attention au zugzang ! (on peut par exemple vérifier qu'il reste autre chose que roi pion et cavalier)
-        if depth >= 3 and self.ply and not in_check:
+        if depth >= 3 and self.ply and not in_check and not board.nulle_3_rep and board.nulle_50_cpt < 50:
             board.side ^= 1 # on change le côté qui joue (on donne littéralement un coup en plus)
             board.en_passant = -1 # on le réinitialise pour éviter des coups etranges
             board.add_to_history() # on ajoute cette étrange position à l'historique afin de pouvoir appliquer l'algorithme dessus
-            board.hash_hist.append(board.position_hash()) # on recrer depuis le début la postion en hashing
+            h = board.position_hash()
+            board.hash_hist.append(h) # on recrer depuis le début la postion en hashing
+            if h in board.nulle_3_rep:
+                board.nulle_3_rep[h] += 1
+            else:
+                board.nulle_3_rep[h] = 1
             score = -self.alphabeta(-beta, -beta+1, depth-3, board) # on regarde simplement si il existe un "bon coup" pour l'autre cote a une profondeur réduite
             board.undo_move(True)
             if score >= beta: # il n'en existe pas
@@ -213,7 +218,7 @@ class Engine:
                 self.pv_length[self.ply] = self.pv_length[self.ply+1]
 
         if not is_legal_move:
-            if in_check:
+            if in_check and not board.is_nulle:
                 return -49000+self.ply # si echec alors il y a mat (le + self.ply assure le mat le plus court)
             else:
                 return 0 # sinon c'est pat
