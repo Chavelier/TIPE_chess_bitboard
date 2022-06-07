@@ -16,7 +16,7 @@ ascii_f = False
 board = Board()
 E = Engine()
 
-
+# board.set_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")
 
 def clear():
     print(100*"\n")
@@ -70,7 +70,6 @@ while cmd not in ["q","quit","exit"]:
             coup += " "
         mv = board.trad_move(coup)
         if mv != -1:
-            print(board.score_move(mv))
             board.make_move(mv)
 
 
