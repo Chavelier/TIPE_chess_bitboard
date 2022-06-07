@@ -96,7 +96,7 @@ NO_PIECE = 12 # utile pour l'encodage des coups
 PIECE_LETTER = "PNBRQKpnbrqk "
 PIECE_ASCII = { p : "♙", k : "♔", q : "♕", n : "♘", b : "♗", r : "♖",
                    P : "♟︎", K : "♚", Q : "♛", N : "♞", B : "♝", R : "♜"}
-PIECE_LETTER_IMAGES = ["wp",'wN','wB','wR','wQ','wK','bp','bN','bB','bR','bQ','bK']
+PIECE_LETTER_IMAGES = ["p_00",'p_01','p_02','p_03','p_04','p_05','p_06','p_07','p_08','p_09','p_10','p_11']
 PIECE_VAL = [100,300,300,500,900,0,-100,-300,-300,-500,-900,0]
 
 PAWN_POS_SCORE = [

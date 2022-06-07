@@ -38,7 +38,7 @@ while cmd not in ["q","quit","exit"]:
         print("copier le fen -> cfen")
         print("tester les performances à la profondeur x -> perf [x]")
     elif cmd == "restart":
-        board.init()
+        board.__init__()
     elif cmd == "debug":
         board.add_to_history()
     elif cmd == "ascii":
