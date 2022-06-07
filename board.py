@@ -41,6 +41,22 @@ class Board:
     def __init__(self):
         """ initialise l'échéquier """
 
+        self.init()
+
+        # tables d'attaques
+        self.pawn_attack = [[], []]
+        self.knight_attack = []
+        self.king_attack = []
+        self.init_leaper_attack()
+
+        self.bishop_attacks = [[0 for _ in range(512)] for _ in range(64)]
+        self.rook_attacks = [[0 for _ in range(4096)] for _ in range(64)]
+        self.usemagic = True # on utilise ou non le magic bitboard
+        self.init_magic_numbers()
+        self.init_slider_attack()
+
+    def init(self): # on sépare 2 inits afin d'éviter de recalculer les magics bitboards
+
         self.side = WHITE
 
         self.bitboard = [ # P N B R Q K p n b r q k
@@ -73,30 +89,20 @@ class Board:
 
         self.history = []
         self.history.append((self.bitboard[:], self.occupancies[:], self.side, self.en_passant, self.castle_right))
+        self.move_history = []
 
         self.is_nulle = False
         self.nulle_50_cpt = 0
         self.nulle_3_rep = {}
 
-        # tables d'attaques
-        self.pawn_attack = [[], []]
-        self.knight_attack = []
-        self.king_attack = []
-        self.init_leaper_attack()
-
-        self.bishop_attacks = [[0 for _ in range(512)] for _ in range(64)]
-        self.rook_attacks = [[0 for _ in range(4096)] for _ in range(64)]
-        self.usemagic = True # on utilise ou non le magic bitboard
-        self.init_magic_numbers()
-        self.init_slider_attack()
 
         # ZOBRIST HASHING
         self.piece_keys = [[0 for _ in range(64)] for _ in range(12)]
         self.enpassant_keys = [0 for _ in range(64)] # on en aurait besoin que de 8 théoriquement (1 par colonne combinée avec le côté qui joue)
         self.castle_keys = [0 for _ in range(16)]
         self.side_key = 0
-        self.hash_hist = [self.position_hash()] # on initialise avec la position 1
         self.init_random_keys()
+        self.hash_hist = [self.position_hash()] # on initialise avec la position 1
 
         self.nulle_3_rep[self.hash_hist[-1]] = 1 # on rajoute la position de départ
 
@@ -611,6 +617,9 @@ class Board:
                     bb = Board.set_bit(bb, 8*i+j)
         return bb
 
+    def is_check(self,side):
+        """ renvoi si le roi de la couleur passée en argument est en echec """
+        return self.square_is_attacked(self.ls1b_index(self.bitboard[K+6*side]), 1^side)
 
     ######################################################################################
     # // GENERATION DES COUPS // #########################################################
@@ -744,14 +753,28 @@ class Board:
         return move_list
 
     def legal_move_generation(self,side):
+        """ génère la liste des coups légaux """
         liste = self.move_generation(side)
         L = []
         for move in liste:
             if self.make_move(move):
                 L.append(move)
                 self.undo_move(True)
-        # print(L)
         return L
+
+
+    def is_this_end(self):
+        if self.is_nulle:
+            print("PAT ! 3 répétitions")
+            return True
+        if self.legal_move_generation(self.side) == []:
+            if self.is_check(self.side):
+                couleur = ["blancs","noirs"]
+                print("MAT ! Victoire des %s\n"%couleur[1^self.side])
+            else:
+                print("PAT !")
+            return True
+        return False
 
 
     def print_move(self,side,legal=True):
@@ -777,9 +800,10 @@ class Board:
     ##### // MAKE MOVE and UNDO MOVE FUNCTIONS // ##############################################################################################
     ############################################################################################################################################
 
-    def add_to_history(self):
+    def add_to_history(self,move=Move()):
         """ ajoute la position actuelle à l'historique """
         self.history.append((self.bitboard[:], self.occupancies[:], self.side, self.en_passant, self.castle_right))
+        self.move_history.append(move)
 
 
     def history_debug(self):
@@ -800,6 +824,7 @@ class Board:
         if real_move and len(self.history) >= 2:
             self.nulle_3_rep[self.hash_hist[-1]] = max(self.nulle_3_rep[self.hash_hist[-1]]-1,0)
             del self.history[-1]
+            del self.move_history[-1]
             del self.hash_hist[-1]
         (bb, occ, sd, enpass, castle) = self.history[-1]
         self.bitboard = bb[:]
@@ -811,7 +836,7 @@ class Board:
     def make_move(self, move, only_capture_flag=False):
         """ fait le coup et l'ajoute à l'historique """
 
-        if (only_capture_flag and not move.capture) or self.nulle_50_cpt >= 50 or self.is_nulle:
+        if (only_capture_flag and not move.capture) or self.is_nulle:
             return 0 # on ne fait pas le coup
 
         hash = self.hash_hist[-1] # on récupère le hash de la position avant le coup
@@ -826,11 +851,12 @@ class Board:
         enpass = move.enpassant
         roque = move.castling
 
-        cpt_sauv = self.nulle_50_cpt
-        if capture or piece in [P,p]:
-            self.nulle_50_cpt = 0
-        else:
-            self.nulle_50_cpt += 1 # on rajoute un coup au compteur
+        # cpt_sauv = self.nulle_50_cpt
+        # if capture or piece in [P,p]:
+        #     self.nulle_50_cpt = 0
+        # else:
+        #     print("on ajoute au compteur")
+        #     self.nulle_50_cpt += 1 # on rajoute un coup au compteur
 
         # on déplace la pièce
         self.bitboard[piece] = self.pop_bit(self.bitboard[piece], source)
@@ -944,14 +970,15 @@ class Board:
         #on vérifie si le roi n'est pas en échec
         if self.square_is_attacked(self.ls1b_index(self.bitboard[K+6*self.side]), 1^self.side):
             self.undo_move(False)
-            self.nulle_50_cpt -= cpt_sauv
+            # print("on retablit les anciens coups")
+            # self.nulle_50_cpt = cpt_sauv
             return 0 # le coup est illegal
 
         # on finalise le coup
         self.side ^= 1 # on change de coté
         hash ^= self.side_key # on change de côté
 
-        self.add_to_history()
+        self.add_to_history(move)
 
         self.hash_hist.append(self.position_hash()) # pas le plus oti mais le hashing incrémental marche pas pour l'instant
         # self.hash_hist.append(hash) # on rajoute la nouvelle position à l'historique des hashs
@@ -988,43 +1015,29 @@ class Board:
         else:
             return -val
 
+
+    @staticmethod
+    def dist(pos1,pos2):
+        """Renvoi la distance entre les cases pos1 et pos2 de l'échéquier"""
+        x1 = pos1%8 ; y1 = pos1//8
+        x2 = pos2%8 ; y2 = pos2//8
+
+        return max(abs(x1 - x2), abs(y1 - y2)) # distance de Tchebychev
+    @staticmethod
+    def dist_bord(pos):
+        x = pos%8 ; y = pos//8
+        xnorm = min(x,7-x) ; ynorm = min(y,7-y)
+        return min(xnorm,ynorm)
+
+
     def evaluation(self,absolute=True):
         """ Renvoie l'évaluation de la position actuelle
-            absolute determine si on doit prendre la valeur opposée si ce sont les noirs qui jouent
-
-            material [t] [mg|eg|ph] Material score, where each piece on the board has a predefined value
-                                    that changes depending on the phase of the game.
-            imbalance [t] [mg|eg|ph] Imbalance score that compares the piece count of each piece type for both
-                                        colours. E.g., it awards having a pair of bishops vs a bishop and a knight.
-            pawns [t] [mg|eg|ph] Evaluation of the pawn structure. E.g., the evaluation considers isolated,
-                                    double, connected, backward, blocked, weak, etc. pawns.
-            knights [t] [mg|eg|ph] Evaluation of knights. E.g., extra points are given to knights
-                                    that occupy outposts protected by pawns.
-            bishops [t] [mg|eg|ph] Evaluation of bishops. E.g., bishops that occupy the same color squares
-                                    as pawns are penalised.
-            rooks [t] [mg|eg|ph] Evaluation of rooks. E.g., rooks that occupy open or semi-open files
-                                    have higher valuation.
-            queens [t] [mg|eg|ph] Evaluation of queens. E.g., queens that have relative pin or discovered
-                                    attack against them are penalized.
-            mobility [t] [mg|eg|ph] Evaluation of piece mobility score. It depends on
-                                    the number of squares attacked by the pieces.
-            king_safety [t] [mg|eg|ph] A complex concept related to king safety. It depends on the number
-                                        and type of pieces that attack squares around the king, shelter strength,
-                                        number of pawns around the king, penalties for being on pawnless flank, etc.
-            threats [t] [mg|eg|ph] Evaluation of threats to pieces, such as whether a pawn can safely advance
-                                    and attack an opponent’s higher value piece, hanging pieces,
-                                    possible xray attacks by rooks, etc.
-            passed_pawns [t] [mg|eg|ph] Evaluates bonuses for passed pawns. The closer a pawn is to the promotion
-                                        rank, the higher is the bonus.
-            space [t] [mg|eg|ph] Evaluation of the space. It depends on the number of safe squares available
-                                    for minor pieces on the central four files on ranks 2 to 4.
-            total [t] [mg|eg|ph] The total evaluation of a given position. It encapsulates all the above concepts."""
-
+            absolute determine si on doit prendre la valeur opposée si ce sont les noirs qui jouent """
 
         val = 0
         foub = 0
         foun = 0
-        piece_restantes = 0
+        pieces_restantes = 0
 
         white_pawn_struct = []
         black_pawn_struct = []
@@ -1043,7 +1056,6 @@ class Board:
         for piece in range(12):
             bb = self.bitboard[piece]
             while bb:
-                piece_restantes += 1
                 case = self.ls1b_index(bb)
                 bb = self.pop_bit(bb, case)
                 val += PIECE_VAL[piece]
@@ -1066,20 +1078,56 @@ class Board:
                         val -= 30
                         if not white_pawn_struct[case % 8]:
                             val -= 20
-                elif piece == K and not white_pawn_struct[case % 8]: # roi sur colonne ouverte
-                    val -= 150
-                elif piece == k and not black_pawn_struct[case % 8]: # roi sur colonne ouverte
-                    val += 150
+                elif piece == K:
+                    roib_pos = case
+                    if not white_pawn_struct[case % 8]: # roi sur colonne ouverte
+                        val -= 150
+                elif piece == k:
+                    roin_pos = case
+                    if not black_pawn_struct[case % 8]: # roi sur colonne ouverte
+                        val += 150
+                if not piece in [K,k,P,p]:
+                    pieces_restantes += 1 # on compte les pieces majeures et mineures
+
+        #pions isolés
+        sep1 = [-1]
+        sep2 = [-1]
+        for i in range(8):
+            if white_pawn_struct[i] == 0:
+                sep1.append(i)
+            if black_pawn_struct[i] == 0:
+                sep2.append(i)
+        for i in range(1,len(sep1)):
+            ilot = white_pawn_struct[sep1[i-1]+1 : sep1[i]]
+            if len(ilot) == 1:
+                val -= 40*ilot[0]
+        for i in range(1,len(sep2)):
+            ilot = black_pawn_struct[sep2[i-1]+1 : sep2[i]]
+            if len(ilot) == 1:
+                val += 40*ilot[0]
+        #pions isolés
+
 
         if foub >= 2:
             val += 40
         if foun >= 2:
             val -= 40
 
+        # finale
+        if pieces_restantes <= 6: # il ne reste plus beaucoup de pieces sur le terrain on pars donc en finale
+            val += 4-self.dist_bord(roin_pos) * 40 # plus l'autre roi est proche du bord plus il sera facile à mater
+            val -= 4-self.dist_bord(roib_pos) * 40
+
+
+            val += (7-self.dist(roib_pos, roin_pos)) * (val//5) # on cherche a s'approcher pour mater
+        # finale
+
+
         if absolute or self.side == WHITE:
             return val
         else:
             return -val
+
 
 
     ############################################################################

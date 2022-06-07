@@ -26,6 +26,7 @@ tabl = Label(tk,textvariable=txt)
 
 reverse_mode = False
 black_mode = False
+search_depth = 4
 board = Board() #création échéquier
 engine = Engine() #creation engine
 
@@ -79,6 +80,10 @@ def affiche_position(l=[]):
         img_file = folderName+'/'+PIECE_LETTER_IMAGES[piece]+".png"
         while bb:
             case = board.ls1b_index(bb)
+            if piece == k and board.side:
+                case_roi = case
+            elif piece == K and not board.side:
+                case_roi = case
             bb = board.pop_bit(bb, case)
             if (reverse_mode and board.side) or black_mode:
                 x = 7-case%8
@@ -89,6 +94,14 @@ def affiche_position(l=[]):
             img_list.append((x,y,PhotoImage(file=img_file)))
     for x,y,img in img_list:
         canvas.create_image(mrgx+(x+0.5)*cell, mrgy+(y+0.5)*cell, image=img)
+    if board.is_check(board.side):
+            if (reverse_mode and board.side) or black_mode:
+                x = 7-case_roi%8
+                y= 7-case_roi//8
+            else:
+                x = case_roi%8
+                y= case_roi//8
+            canvas.create_rectangle(mrgx+x*cell,mrgy+y*cell,mrgx+(x+1)*cell,mrgy+(y+1)*cell,fill='#ff0000',stipple="gray50")
             # ma_piece = B.cases[case_id]
             # if ma_piece.nom != ma_piece.nomPiece[0]:
             #     pos = ma_piece.nomPiece.index(ma_piece.nom)-1
@@ -122,6 +135,8 @@ def execute_cmd():
 
     global reverse_mode
     global black_mode
+    global move_historique
+    global search_depth
 
     if cmd == "help":
         print("redemarer une nouvelle partie -> new")
@@ -132,9 +147,11 @@ def execute_cmd():
         print("charger un fen -> fen rnbqkbnr/ppp2ppp/4p3/3p4/Q1PP4/8/PP2PPPP/RNB1KBNR b KQkq - 1 3 (ex)")
         print("copier le fen -> cfen")
         print("tester les performances à la profondeur x -> perf [x]")
+    elif "sd" in cmd:
+        search_depth = int(cmd.split()[1])
     elif "go" in cmd:
         if cmd == "go":
-            depth = 4
+            depth = search_depth
         else:
             depth = int(cmd.split()[1])
         mv = engine.bot_move(depth, board)
@@ -155,7 +172,8 @@ def execute_cmd():
             del move_historique[-1]
         board.undo_move(True)
     elif cmd == "new":
-        board.__init__()
+        move_historique = []
+        board.init()
         engine.__init__()
     elif cmd == "quit":
         tk.quit()
@@ -186,7 +204,9 @@ def execute_cmd():
 
 
     affiche_position()
+    txt.set("Eval (côté blanc) : %s"%(board.evaluation(True)/100))
     cmd_bar.delete(0,"end")
+    board.is_this_end() # on teste si c'est la fin
 
 
 

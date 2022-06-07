@@ -38,9 +38,13 @@ class Engine:
 
     def bot_move(self,depth,board):
 
-        count = board.count_bit(board.occupancies[2]) #nb de piece restante
-        if count <= 5:
-            pass # mettre ici truc des finales
+        coups = self.ouverture(board)
+        if coups != []:
+            c = coups[rd.randrange(0,len(coups))]+" "
+            print("Coup d'ouverture : "+c)
+            move = board.trad_move(c)
+            if move != -1:
+                return move
 
         # tri PV variables
         self.is_following_pv = False
@@ -124,6 +128,9 @@ class Engine:
 
         self.pv_length[self.ply] = self.ply # a voir si on peut pas écrire ça dans bot move
 
+        if board.is_nulle:
+            return 0
+
         hash = board.hash_hist[-1]
         hash_flag = 1 # on initialise à alpha flag
         transpo_val = self.get_transpo(hash, depth, alpha, beta)
@@ -137,7 +144,7 @@ class Engine:
         if self.ply >= MAX_PLY: #pour ne pas aller trop loin dans la recherche
             return board.evaluation(False)
 
-        in_check = board.square_is_attacked(board.ls1b_index(board.bitboard[K+6*board.side]), 1^board.side) # est ce que le roi est en echec
+        in_check = board.is_check(board.side) # est ce que le roi est en echec
         if in_check: # on ne cherche un peu plus loin si il y a echec
             depth += 1
 
@@ -353,3 +360,25 @@ class Engine:
                 if val[2] == 2 and val[1] >= beta: # beta flag
                     return beta
         return None
+
+
+    ###################################################################################################
+    ########## GESTION OUVERTURE ######################################################################
+    ###################################################################################################
+
+    def ouverture(self,board):
+        """renvoi la liste des coups jouables depuis la position selon l'ouverture"""
+        ligne_partielle = ""
+        suite_coups = ""
+        all_coups = [] #liste de tous les coups possibles
+        nb_coup = len(board.move_history)
+        with open("book.txt",'rt') as ouvertures:
+            for mv in board.move_history:
+                suite_coups += mv.txt(False)
+            for ligne in ouvertures:
+                ligne_partielle = ""+ligne[0 : 5*nb_coup]
+                if suite_coups == ligne_partielle:
+                    all_coups += [ligne[5*nb_coup : 5*nb_coup + 4]]
+                else :
+                    ligne_partielle = ""
+        return all_coups
