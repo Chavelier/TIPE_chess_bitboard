@@ -8,27 +8,22 @@ Created on Mon Feb  21 12:38:25 2022
 
 MAIN
 """
-# from board import *
-# from engine import *
-#
-# B = Board()
-# E = Engine()
-#
+from board import *
+from engine import *
+
+B = Board()
+E = Engine()
+
+occ = 0
+occ = B.set_bit(occ)
+
+B.print_bb(B.rook_mask[E4])
+# B.print_board()
 # mv_list = B.legal_move_generation(B.side)
-#
 # for mv in mv_list:
-#     print(PIECE_LETTER[mv.piece]+"_")
-#
-# # B.set_fen(TRICKY_POS)
-# # B.print_board()
-# # mv_list = B.legal_move_generation(B.side)
-# # for mv in mv_list:
-# #     print(B.score_move(mv))
-# # print()
-# # mv_list = B.tri_move(mv_list)
-# # for mv in mv_list:
-# #     print(B.score_move(mv))
-# # print()
-
-
-print(3 in [1,2,3])
+#     print(B.score_move(mv))
+# print()
+# mv_list = B.tri_move(mv_list)
+# for mv in mv_list:
+#     print(B.score_move(mv))
+# print()

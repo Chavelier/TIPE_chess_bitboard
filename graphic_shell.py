@@ -19,6 +19,7 @@ import sys
 import math
 import pyperclip
 import openfinals
+import random as rd
 from init import *
 from pygamebutton import Button
 
@@ -78,7 +79,6 @@ def liste_to_move(l):
 def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,reverse,depth=4,PGN=False,FEN=False,history=[]):
     """Tourne en boucle et actualise le board en fonction des entrées de l'utilisateur"""
 
-    print(nbjoueur)
 
     B = board.Board()
     cervo = engine.Engine()
@@ -126,13 +126,11 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,reverse,depth=4,PGN=False,FEN=
                         player_clicks.append(sq_selected) #On append de la même manière pour le premier et deuxième clic
                     if len(player_clicks) == 2: #Après le 2nd click
                         coup = liste_to_move(player_clicks)
-                        print(coup)
                         if len(coup) == 4:
                             coup += " "
                         mv = B.trad_move(coup)
                         if mv != -1:
                             val_move = B.make_move(mv)
-                            #print(openfinals.find_book_moves(B.get_fen()))
                             #print(openfinals.find_endgame_pos_val(None))
                             if val_move == 1:
                                 move_made,animate = True,True
@@ -156,7 +154,24 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,reverse,depth=4,PGN=False,FEN=
                     valid_moves,sq_selected,player_clicks,pgn_history = B.legal_move_generation(WHITE),(),[],[]
                     move_made,animate = False,False
                 if e.key == py.K_SPACE:
-                    val_move = B.make_move(cervo.bot_move(depth,B))
+                    opening = openfinals.find_book_moves(B.get_fen())
+                    if opening != []:
+                        rd.shuffle(opening)
+                        mv = B.trad_move(liste_to_move(opening[0]))
+                        val_move = B.make_move(mv)
+                        if val_move == 1:
+                            move_made,animate = True,True
+                            play_sound(mv)
+                            sq_selected,player_clicks = (),[] #On reste les clicks
+                            pgn_history.append(B.move_to_pgn(mv,valid_moves))
+                    else:
+                        mv = cervo.bot_move(depth,B)
+                        val_move = B.make_move(mv)
+                        if val_move == 1:
+                            move_made,animate = True,True
+                            play_sound(mv)
+                            sq_selected,player_clicks = (),[] #On reste les clicks
+                            pgn_history.append(B.move_to_pgn(mv,valid_moves))
 
 
         if move_made:

@@ -45,20 +45,22 @@ class Board:
 
         self.side = WHITE
 
-        self.bitboard = [ # P N B R Q K p n b r q k
-            71776119061217280,
-            2**57+2**62,
-            2**58+2**61,
-            2**56+2**63,
-            2**59,
-            2**60,
-            65280,
-            2**1+2**6,
-            2**2+2**5,
-            2**0+2**7,
-            2**3,
-            2**4
+        self.bitboard = [
+            71776119061217280, #Pions blancs
+            2**57+2**62, #Cavaliers blancs
+            2**58+2**61, #Fous blancs
+            2**56+2**63, #Tours blanches
+            2**59, #Reine blanche
+            2**60, #Roi blanc
+
+            65280, #Pions noirs
+            2**1+2**6, #Cavaliers noirs
+            2**2+2**5, #Fous noirs
+            2**0+2**7, #Tours noires
+            2**3, #Reine noire
+            2**4 #Roi noir
             ]
+
         self.occupancies = [0,0,0]
         for i in range(6):
             self.occupancies[0] |= self.bitboard[i]
@@ -989,7 +991,12 @@ class Board:
 
         source = CASES.index(string[0:2].lower())
         target = CASES.index(string[2:4].lower())
-        prom = string[4]
+
+        if len(string) > 4:
+            prom = string[4]
+        else:
+            prom = " "
+
         if self.side == WHITE:
             promotion = PIECE_LETTER.index(prom.upper())
         else:

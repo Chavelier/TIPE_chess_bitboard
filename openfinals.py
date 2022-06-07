@@ -42,9 +42,7 @@ def find_book_moves(boardchess):
         else:
             for entry in reader.find_all(boardchess):  #élement du module chess.polyglot, pas chess
                 mymove = entrymove_to_moveLog(entry.move)
-                #print(mymove)
-                toprint=(mymove,entry.raw_move)
-                moves.append(toprint)
+                moves.append(mymove)
     return moves
 
 def find_endgame_pos_val(boardfinal):
