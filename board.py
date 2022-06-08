@@ -1,13 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Feb  21 12:35:18 2022
-
-@author: Corto Cristofoli
-@co-author : Jeunier Hugo
-@secret-author : Lance-Perlick Come
-
-BOARD
-"""
+""" BOARD """
 
 from init import *
 import time

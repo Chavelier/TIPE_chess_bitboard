@@ -1,13 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Feb  21 12:38:25 2022
-
-@author: Corto Cristofoli
-@co-author : Jeunier Hugo
-@secret-author : Lance-Perlick Come
-
-MAIN
-"""
+""" MAIN """
 
 from tkinter import *
 from engine import *
@@ -155,6 +146,7 @@ def execute_cmd():
         else:
             depth = int(cmd.split()[1])
         mv = engine.bot_move(depth, board)
+        move_historique.append((mv.source,mv.target))
         board.make_move(mv)
     elif cmd == "moves":
         board.print_move(board.side)

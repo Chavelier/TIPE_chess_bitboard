@@ -1,13 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Mar 28 11:39:03 2022
-
-@author: Corto Cristofoli
-@co-author : Jeunier Hugo
-@secret-author : Lance-Perlick Come
-
-ENGINE
-"""
+""" ENGINE """
 
 from board import *
 
