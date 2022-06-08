@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import chess
-from board import *
+import board
 import struct
 import os
 import mmap
@@ -31,7 +31,7 @@ from typing import Callable, Container, Iterator, List, NamedTuple, Optional, Ty
 
 PathLike = Union[str, bytes, os.PathLike]
 
-boardcorto = Board()
+boardcorto = board.Board()
 ENTRY_STRUCT = struct.Struct(">QHHI")
 
 

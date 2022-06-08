@@ -24,7 +24,11 @@ class Engine:
         self.ply = 0 # compteur de la profondeur (en demi coups)
         self.transposition = {} # table des transpositions de la forme { clef : (depth, value, flag, best move) }
         self.clear_variables()
-
+        self.nodes = 0
+        self.is_following_pv = False
+        self.is_score_pv = False
+        self.max_depth = 0
+        self.clear_variables()
 
 
 
@@ -37,10 +41,6 @@ class Engine:
 
 
     def bot_move(self,depth,board):
-
-        count = board.count_bit(board.occupancies[2]) #nb de piece restante
-        if count <= 5:
-            pass # mettre ici truc des finales
 
         # tri PV variables
         self.is_following_pv = False

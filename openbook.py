@@ -1,10 +1,6 @@
-from board import *
-import syzygy
 import polyglot
 import chess
-import numpy as np
 
-board = Board()
 
 def entrymove_to_moveLog(movefromEntry):
     ''' Prend en entrée un move donnée par une entry du module chess.polyglot
@@ -43,38 +39,4 @@ def find_book_moves(boardchess):
             for entry in reader.find_all(boardchess):  #élement du module chess.polyglot, pas chess
                 mymove = entrymove_to_moveLog(entry.move)
                 moves.append(mymove)
-    return moves
-
-def find_endgame_pos_val(boardfinal):
-    '''Prend en entrée un board et renvoie la valeur
-    de la position sous la métrique WDL.
-
-    +-----+--------------------------------------------+
-    | WDL |                                            |
-    +=====+============================================+
-    |  -2 | Gain pour les noirs (considérant le        |
-    |     | compteur des 50-coups à 0)                 |
-    +-----+--------------------------------------------+
-    |  -1 | Gain pour les noirs, mais partie nulle     |
-    |     | avec la règle des 50 coups                 |
-    +-----+--------------------------------------------+
-    |   0 | Partie nulle.                              |
-    +-----+--------------------------------------------+
-    |  1  | Gain pour les blancs, mais partie nulle    |
-    |     | avec la règle des 50 coups                 |
-    +-----+--------------------------------------------+
-    |  2  | Gain pour les blancs (considérant le       |
-    |     | compteur des 50-coups à 0)                 |
-    +-----+--------------------------------------------+
-
-    Faut-il ajouter ?:
-
-    n_pieces = 0
-    for piece in board.board:
-        if piece != '--':
-            n_pîeces += 1
-    if n_pieces <= 6:
-    '''
-    with syzygy.open_tablebase("wdl") as tablebase:
-        res = tablebase.probe_wdl(boardfinal)
-        return res
+    return moves,moves!=[]

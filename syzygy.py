@@ -1675,7 +1675,7 @@ class Tablebase:
 
     def probe_wdl(self, boardrecup) -> int:
 
-        board = chess.Board("8/7k/5q2/8/2Q5/8/3K4/8 w - - 0 1") #TODO ON RECUP LA FEN ICI
+        board = chess.Board(boardrecup) #TODO ON RECUP LA FEN ICI
         # board = chess.Board("boardrecup")
         """
         Probes WDL tables for win/draw/loss information under the 50-move rule,

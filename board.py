@@ -9,8 +9,10 @@ Created on Mon Feb  21 12:35:18 2022
 BOARD
 """
 
+import syzygy
 from init import *
 import time
+
 
 class Move:
     """ Représentation des coups """
@@ -312,13 +314,16 @@ class Board:
             droit_aux_roques += 'k'
         if self.castle_right & 8: # queen castling
             droit_aux_roques += 'q'
-        fenboard += droit_aux_roques + ' '
+
+        if droit_aux_roques != '':
+            fenboard += droit_aux_roques + ' '
 
         if self.en_passant != -1:
             fenboard += CASES[self.en_passant] + ' '
         else:
             fenboard += '- '
-        return fenboard + '0 1' #TODO LE COMPTAGE
+        print(fenboard)
+        return fenboard + '0 1'
 
     def move_to_pgn(self,move,valid_moves):
         "Prend en entrée un coup et renvoie sa traduction en PGN. Ex : Qxe5+"
@@ -813,9 +818,6 @@ class Board:
     def make_move(self, move, only_capture_flag=False):
         """ fait le coup et l'ajoute à l'historique """
 
-        if (only_capture_flag and not move.capture) or self.nulle_50_cpt >= 50 or self.is_nulle:
-            return 0 # on ne fait pas le coup
-
         hash = self.hash_hist[-1] # on récupère le hash de la position avant le coup
 
         # on récupère les informations du coup
@@ -990,6 +992,33 @@ class Board:
         else:
             return -val
 
+    def find_endgame_pos_val(self,boardfinal):
+        '''Prend en entrée un board et renvoie la valeur
+        de la position sous la métrique WDL.
+
+        +-----+--------------------------------------------+
+        | WDL |                                            |
+        +=====+============================================+
+        |  -2 | Gain pour les noirs (considérant le        |
+        |     | compteur des 50-coups à 0)                 |
+        +-----+--------------------------------------------+
+        |  -1 | Gain pour les noirs, mais partie nulle     |
+        |     | avec la règle des 50 coups                 |
+        +-----+--------------------------------------------+
+        |   0 | Partie nulle.                              |
+        +-----+--------------------------------------------+
+        |  1  | Gain pour les blancs, mais partie nulle    |
+        |     | avec la règle des 50 coups                 |
+        +-----+--------------------------------------------+
+        |  2  | Gain pour les blancs (considérant le       |
+        |     | compteur des 50-coups à 0)                 |
+        +-----+--------------------------------------------+
+
+        '''
+        with syzygy.open_tablebase("wdl") as tablebase:
+            res = tablebase.probe_wdl(boardfinal)
+            return res
+
     def evaluation(self,absolute=True):
         """ Renvoie l'évaluation de la position actuelle
             absolute determine si on doit prendre la valeur opposée si ce sont les noirs qui jouent
@@ -1077,6 +1106,16 @@ class Board:
             val += 40
         if foun >= 2:
             val -= 40
+
+
+        if piece_restantes <= 6:
+            val = self.find_endgame_pos_val(self.get_fen())
+            if val == 2:
+                return 50000
+            elif val == -2:
+                return -50000
+            else:
+                return 0
 
         if absolute or self.side == WHITE:
             return val

@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-
-#TODO BUG CLICK TROP LONG QUI VIENT DE LAJOUT DU BOUTON MENU (DEPLACER LE TRUC?)
 """
 Created on Tue Mar  8 14:20:06 2022
 
@@ -18,7 +16,7 @@ import time
 import sys
 import math
 import pyperclip
-import openfinals
+import openbook
 import random as rd
 from init import *
 from pygamebutton import Button
@@ -89,11 +87,12 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,reverse,depth=4,PGN=False,FEN=
         side = B.side
     py.init()
     screen.fill(py.Color("black"))
-    valid_moves,move_made,animate,running,game_over = B.legal_move_generation(side),False,False,True,False  #TODO Servira pour jouer uniquement des coups valides!#Flag utilisé lorsqu'un move est joué (est utile pour éviter les bugs),#flag pour savoir si on doit animer,#A voir quand il y aura les mats !! #TODO ce n'est pas pour tout de suite
+    valid_moves,move_made,animate,running,game_over = B.legal_move_generation(side),False,False,True,False #Flag utilisé lorsqu'un move est joué (est utile pour éviter les bugs),#flag pour savoir si on doit animer,#A voir quand il y aura les mats !! #TODO ce n'est pas pour tout de suite
     loadImages() #On fait ça une seule fois avant la boucle while
     sounds[0].play()
     sq_selected,player_clicks,pgn_history = (),[],history #Pas de case sélectionnée initialement, tuple(row,col) #Garder la trace des cliques de l'utilisateur (deux tuples(row,col))
     moveLogFont,coordFont = py.font.SysFont("Montserrat",20,False,False),py.font.SysFont("Montserrat",18,False,False)
+    OPEN = True #Drapeau qui passe à False lorsque la bibliothèque d'ouverture ne trouve plus de coups
 
 
     def play_sound(mv):
@@ -131,12 +130,14 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,reverse,depth=4,PGN=False,FEN=
                         mv = B.trad_move(coup)
                         if mv != -1:
                             val_move = B.make_move(mv)
-                            #print(openfinals.find_endgame_pos_val(None))
+                            #print(openbook.find_endgame_pos_val(None))
                             if val_move == 1:
                                 move_made,animate = True,True
                                 play_sound(mv)
                                 sq_selected,player_clicks = (),[] #On reste les clicks
                                 pgn_history.append(B.move_to_pgn(mv,valid_moves))
+                                if OPEN:
+                                    opening,OPEN = openbook.find_book_moves(B.get_fen())
                         else:
                             player_clicks = [sq_selected] #Petit tips : quand le deuxième clic d'une première pièce n'est pas sur une case autorisée par un coup légal, la case du deuxième du clic devient la case de départ !!
                             animate = False
@@ -154,8 +155,8 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,reverse,depth=4,PGN=False,FEN=
                     valid_moves,sq_selected,player_clicks,pgn_history = B.legal_move_generation(WHITE),(),[],[]
                     move_made,animate = False,False
                 if e.key == py.K_SPACE:
-                    opening = openfinals.find_book_moves(B.get_fen())
-                    if opening != []:
+                    if OPEN:
+                        opening,OPEN = openbook.find_book_moves(B.get_fen())
                         rd.shuffle(opening)
                         mv = B.trad_move(liste_to_move(opening[0]))
                         val_move = B.make_move(mv)
@@ -178,7 +179,7 @@ def run(eval_bar_flag,nbjoueur,pgn_game,fen_board,reverse,depth=4,PGN=False,FEN=
             if animate:
                 animate_move(mv,screen,B,clock,coordFont,reverse)
                 valid_moves,move_made,animate = B.legal_move_generation(B.side),False,False
-        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,[eval_bar_flag] + [round(B.evaluation()/100,1)],reverse)
+        draw_game_state(screen,B,valid_moves,sq_selected,moveLogFont,coordFont,pgn_history,[eval_bar_flag] + [round(cervo.alphabeta(-50000,50000,2,B)/100,1)],reverse)
         draw_menu_buttons(screen,eval_bar_flag,depth,B,history)
         clock.tick(MAX_FPS)
         py.display.flip()
@@ -198,7 +199,7 @@ def highlight_squares(screen,B,valid_moves,sq_selected):
     for i in range(12):
         if B.get_bit(B.bitboard[i],case):
             occ_case=True
-    if occ_case: #TODO test case vide
+    if occ_case:
         screen.blit(s,(col*SQ_SIZE,row*SQ_SIZE))
 
     #On surligne sur les cases légales pour la pièce
@@ -275,8 +276,6 @@ def animate_move(move,screen,B,clock,font,reverse): #C'est pas le plus opti mais
         for i in range(12):
             if B.get_bit(B.bitboard[i],case):
                 occ_case=True
-        #if occ_case:
-            #screen.blit(IMAGES[piecearrivee], end_square) TODO
         screen.blit(IMAGES[PIECE_LETTER[move.piece]], py.Rect(col*SQ_SIZE,row*SQ_SIZE, SQ_SIZE,SQ_SIZE))
         py.display.flip()
         clock.tick(480)
