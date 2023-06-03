@@ -150,6 +150,11 @@ def execute_cmd():
         board.make_move(mv)
     elif cmd == "moves":
         board.print_move(board.side)
+    elif cmd == "bitboards":
+        for i in range(len(board.bitboard)):
+            print(PIECE_LETTER[i],PIECE_ASCII[i])
+            bb = board.bitboard[i]
+            board.print_bb(bb,False)
     elif cmd == "cfen":
         pyperclip.copy(board.get_fen())
     elif  cmd[0:4] == "fen ":

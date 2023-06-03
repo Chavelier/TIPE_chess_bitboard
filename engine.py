@@ -122,9 +122,9 @@ class Engine:
         if board.is_nulle:
             return 0
 
-        hash = board.hash_hist[-1]
+        Hash = board.hash_hist[-1]
         hash_flag = 1 # on initialise à alpha flag
-        transpo_val = self.get_transpo(hash, depth, alpha, beta)
+        transpo_val = self.get_transpo(Hash, depth, alpha, beta)
         if self.ply and transpo_val != None:
             return transpo_val
 
@@ -177,7 +177,7 @@ class Engine:
             #### DETERMINATION DU SCORE ####
             if moves_searched == 0: # on fait une recherche normale
                 score = -self.alphabeta(-beta,-alpha,depth-1,board)
-                # self.transposition[hash] = (depth,score)
+                # self.transposition[Hash] = (depth,score)
             else: # Late Move Reduction (LMR)
                 if moves_searched >= FULL_DEPTH_MOVES and depth >= REDUCTION_LIMIT and not in_check and not mv.capture and mv.promotion == NO_PIECE: # condition pour considerer la LMR
                     score = -self.alphabeta(-alpha-1, -alpha, depth-2, board)
@@ -187,7 +187,7 @@ class Engine:
                     score = -self.alphabeta(-alpha-1,-alpha,depth-1,board) # on recherche en supposant que tous les coups restants sont moins bons
                     if score > alpha and score < beta: # on s'est trompé il existe, un meilleur coup, on a perdu du temps mais globalement c'est plus efficace
                         score = -self.alphabeta(-beta,-alpha,depth-1,board)
-                        # self.transposition[hash] = (depth,score)
+                        # self.transposition[Hash] = (depth,score)
 
             #### FIN DETERMINATION DU SCORE ####
 
@@ -197,7 +197,7 @@ class Engine:
             moves_searched += 1
 
             if score >= beta: # fail high-> on coupe cette partie
-                self.transposition[hash] = (depth,beta,2) # on enregistre la position avec le flag beta
+                self.transposition[Hash] = (depth,beta,2) # on enregistre la position avec le flag beta
 
                 if not mv.capture: # on n'enregistre seulement les coups discrets
                     self.killer_moves[1][self.ply] = self.killer_moves[0][self.ply] # on garde en mémoire l'ancien killer move
@@ -225,7 +225,7 @@ class Engine:
             else:
                 return 0 # sinon c'est pat
 
-        self.transposition[hash] = (depth,alpha,hash_flag)
+        self.transposition[Hash] = (depth,alpha,hash_flag)
 
         return alpha
 
