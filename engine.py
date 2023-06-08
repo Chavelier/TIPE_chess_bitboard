@@ -97,6 +97,7 @@ class Engine:
         self.is_following_pv = False
         self.is_score_pv = False
 
+        print("\ncalcul...")
         tic = time.time()
         score = self.alphabeta(-50000,50000,depth,board)
         pv = ""
@@ -109,7 +110,7 @@ class Engine:
         print("Profondeur maximale atteinte : %s"%self.max_depth)
         print("Temps de calcul : %ss"%(time.time()-tic))
 
-        print("taille de la table de transpositions : %s\n\n"%len(self.transposition))
+        print("taille de la table de transpositions : %s\n"%len(self.transposition))
         return self.pv_table[0][0]
 
 
@@ -122,11 +123,12 @@ class Engine:
         if board.is_nulle:
             return 0
 
-        Hash = board.hash_hist[-1]
-        hash_flag = 1 # on initialise à alpha flag
-        transpo_val = self.get_transpo(Hash, depth, alpha, beta)
-        if self.ply and transpo_val != None:
-            return transpo_val
+        if board.usetranspo:
+            Hash = board.hash_hist[-1]
+            hash_flag = 1 # on initialise à alpha flag
+            transpo_val = self.get_transpo(Hash, depth, alpha, beta)
+            if self.ply and transpo_val != None:
+                return transpo_val
 
         if depth == 0:
             # return board.naive_eval()
@@ -148,12 +150,14 @@ class Engine:
             board.side ^= 1 # on change le côté qui joue (on donne littéralement un coup en plus)
             board.en_passant = -1 # on le réinitialise pour éviter des coups etranges
             board.add_to_history() # on ajoute cette étrange position à l'historique afin de pouvoir appliquer l'algorithme dessus
-            h = board.position_hash()
-            board.hash_hist.append(h) # on recrer depuis le début la postion en hashing
-            if h in board.nulle_3_rep:
-                board.nulle_3_rep[h] += 1
-            else:
-                board.nulle_3_rep[h] = 1
+
+            if board.usetranspo:
+                h = board.position_hash()
+                board.hash_hist.append(h) # on recreer depuis le début la postion en hashing
+                if h in board.nulle_3_rep:
+                    board.nulle_3_rep[h] += 1
+                else:
+                    board.nulle_3_rep[h] = 1
             score = -self.alphabeta(-beta, -beta+1, depth-3, board) # on regarde simplement si il existe un "bon coup" pour l'autre cote a une profondeur réduite
             board.undo_move(True)
             if score >= beta: # il n'en existe pas
@@ -162,7 +166,7 @@ class Engine:
         move_list = board.move_generation(board.side)
         if self.is_following_pv:
             self.enable_pv_scoring(move_list)
-        move_list = self.tri_move(move_list,board) # on tri les coups avec la méthode MVV LVA
+        move_list = self.tri_move(move_list,board) # on tri les coups avec la méthode MVV LVA, killer moves,...
         # rd.shuffle(move_list) ### l'ordre a une importance
 
         moves_searched = 0 # nombre de coups analysés
@@ -171,11 +175,11 @@ class Engine:
                 continue # on le passe donc
             is_legal_move = True # il existe un coup legal
 
-            self.ply += 1
+            self.ply += 1 # on est alors à une profondeur +1 dans l'arbre
 
 
             #### DETERMINATION DU SCORE ####
-            if moves_searched == 0: # on fait une recherche normale
+            if moves_searched == 0: # on fait une recherche normale (souvent le premier coup est celui de la variation principale donc PVS aussi)
                 score = -self.alphabeta(-beta,-alpha,depth-1,board)
                 # self.transposition[Hash] = (depth,score)
             else: # Late Move Reduction (LMR)
@@ -197,7 +201,8 @@ class Engine:
             moves_searched += 1
 
             if score >= beta: # fail high-> on coupe cette partie
-                self.transposition[Hash] = (depth,beta,2) # on enregistre la position avec le flag beta
+                if board.usetranspo:
+                    self.transposition[Hash] = (depth,beta,2) # on enregistre la position avec le flag beta
 
                 if not mv.capture: # on n'enregistre seulement les coups discrets
                     self.killer_moves[1][self.ply] = self.killer_moves[0][self.ply] # on garde en mémoire l'ancien killer move
@@ -225,7 +230,8 @@ class Engine:
             else:
                 return 0 # sinon c'est pat
 
-        self.transposition[Hash] = (depth,alpha,hash_flag)
+        if board.usetranspo:
+            self.transposition[Hash] = (depth,alpha,hash_flag)
 
         return alpha
 
