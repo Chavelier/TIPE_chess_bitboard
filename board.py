@@ -88,7 +88,7 @@ class Board:
 
 
         # ZOBRIST HASHING
-        self.usetranspo = False # on utilise ou non la table de transposition
+        self.usetranspo = True # on utilise ou non la table de transposition
 
         if self.usetranspo:
             self.piece_keys = [[0 for _ in range(64)] for _ in range(12)]
@@ -803,14 +803,14 @@ class Board:
 
     def history_debug(self):
         L = []
-        id = -1
+        Id = -1
         last_pos = ([],[],0,0,0)
         for pos in self.history:
             # print(pos)
             if pos != last_pos:
-                id += 1
+                Id += 1
                 last_pos = pos
-            L.append(id)
+            L.append(Id)
         return L
 
     def undo_move(self, real_move):
@@ -836,7 +836,7 @@ class Board:
             return 0 # on ne fait pas le coup
 
         if self.usetranspo:
-            hash = self.hash_hist[-1] # on récupère le hash de la position avant le coup
+            Hash = self.hash_hist[-1] # on récupère le hash de la position avant le coup
 
         # on récupère les informations du coup
         source = move.source
@@ -855,16 +855,17 @@ class Board:
         #     print("on ajoute au compteur")
         #     self.nulle_50_cpt += 1 # on rajoute un coup au compteur
 
+
         # on déplace la pièce
         self.bitboard[piece] = self.pop_bit(self.bitboard[piece], source)
-        if self.usetranspo: hash ^= self.piece_keys[piece][source] # on enlève la piece de la case de départ
+        if self.usetranspo: Hash ^= self.piece_keys[piece][source] # on enlève la piece de la case de départ
 
         if promote != NO_PIECE: # si il y a une promotion
             self.bitboard[promote] = self.set_bit(self.bitboard[promote], target)
-            if self.usetranspo: hash ^= self.piece_keys[promote][target] # on rajoute la promotion sur la case d'arrivée
+            if self.usetranspo: Hash ^= self.piece_keys[promote][target] # on rajoute la promotion sur la case d'arrivée
         else:
             self.bitboard[piece] = self.set_bit(self.bitboard[piece], target)
-            if self.usetranspo: hash ^= self.piece_keys[piece][target] # on rajoute la piece sur la case d'arrivée
+            if self.usetranspo: Hash ^= self.piece_keys[piece][target] # on rajoute la piece sur la case d'arrivée
 
         self.occupancies[self.side] = self.pop_bit(self.occupancies[self.side], source)
         self.occupancies[self.side] = self.set_bit(self.occupancies[self.side], target)
@@ -874,46 +875,51 @@ class Board:
         if enpass: # cas particulier : prise en passant
             if self.side == WHITE:
                 self.bitboard[p] = self.pop_bit(self.bitboard[p], target+8)
-                if self.usetranspo: hash ^= self.piece_keys[p][target+8]
+                if self.usetranspo: Hash ^= self.piece_keys[p][target+8]
 
                 self.occupancies[1] = self.pop_bit(self.occupancies[1], target+8) # on retire la piece de l'occupance global de la couleur attaquée
                 self.occupancies[2] = self.pop_bit(self.occupancies[2], target+8)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], target)
             else:
                 self.bitboard[P] = self.pop_bit(self.bitboard[P], target-8)
-                if self.usetranspo: hash ^= self.piece_keys[P][target-8]
+                if self.usetranspo: Hash ^= self.piece_keys[P][target-8]
 
                 self.occupancies[0] = self.pop_bit(self.occupancies[0], target-8) # on retire la piece de l'occupance global de la couleur attaquée
                 self.occupancies[2] = self.pop_bit(self.occupancies[2], target-8)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], target)
 
-        if capture:
-            self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target) # on retire la piece de l'occupance global de la couleur attaquée
 
+        if self.usetranspo and self.en_passant != -1: Hash ^= self.enpassant_keys[self.en_passant] # on enlève potentiellement la dernière case de en passant
+        if double: # on définit la nouvelle case de en passant
+            self.en_passant = source + (-1 + 2*self.side)*8
+            if self.usetranspo: Hash ^= self.enpassant_keys[self.en_passant] # on rajoute la case en passant dans le Hash
+        else:
+            self.en_passant = -1
+
+        prise = -1
+        if capture:
+            self.occupancies[1-self.side] = self.pop_bit(self.occupancies[1-self.side], target) # on retire la piece de l'occupance globale de la couleur attaquée
+
+            for i in range(12):
+                if self.get_bit(self.bitboard[i], target):
+                    prise = i
             for i in range((1-self.side)*6,(2-self.side)*6): # on parcours les pieces de la couleur adverse
                 if self.get_bit(self.bitboard[i], target):
                     self.bitboard[i] = self.pop_bit(self.bitboard[i], target)
-                    if self.usetranspo: hash ^= self.piece_keys[i][target] # on efface la piece capturée
+                    if self.usetranspo: Hash ^= self.piece_keys[i][target] # on enlève la piece capturée
                     break
         else:
             self.occupancies[2] = self.set_bit(self.occupancies[2], target) # il n'y avait pas de piece avant donc on doit l'ajouter
 
 
-        if self.usetranspo and self.en_passant != -1: hash ^= self.enpassant_keys[self.en_passant] # on enlève potentiellement la dernière case de en passant
-        if double: # on défini la nouvelle case de en passant
-            self.en_passant = source + (-1 + 2*self.side)*8
-            if self.usetranspo: hash ^= self.enpassant_keys[self.en_passant] # on rajoute la case en passant dans le hash
-        else:
-            self.en_passant = -1
-
-        if self.usetranspo: hash ^= self.castle_keys[self.castle_right] # on enlève l'ancien castle rigth
+        if self.usetranspo: Hash ^= self.castle_keys[self.castle_right] # on enlève l'ancien castle right
         if roque: # on doit deplacer la tour et enlever le droit au roque
             if target == G1:
                 self.bitboard[R] = self.set_bit(self.bitboard[R], F1)
                 self.bitboard[R] = self.pop_bit(self.bitboard[R], H1)
                 if self.usetranspo:
-                    hash ^= self.piece_keys[R][F1]
-                    hash ^= self.piece_keys[R][H1]
+                    Hash ^= self.piece_keys[R][F1]
+                    Hash ^= self.piece_keys[R][H1]
                 self.occupancies[0] = self.set_bit(self.occupancies[0], F1)
                 self.occupancies[0] = self.pop_bit(self.occupancies[0], H1)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], F1)
@@ -923,8 +929,8 @@ class Board:
                 self.bitboard[R] = self.set_bit(self.bitboard[R], D1)
                 self.bitboard[R] = self.pop_bit(self.bitboard[R], A1)
                 if self.usetranspo:
-                    hash ^= self.piece_keys[R][D1]
-                    hash ^= self.piece_keys[R][A1]
+                    Hash ^= self.piece_keys[R][D1]
+                    Hash ^= self.piece_keys[R][A1]
                 self.occupancies[0] = self.set_bit(self.occupancies[0], D1)
                 self.occupancies[0] = self.pop_bit(self.occupancies[0], A1)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], D1)
@@ -934,10 +940,10 @@ class Board:
                 self.bitboard[r] = self.set_bit(self.bitboard[r], F8)
                 self.bitboard[r] = self.pop_bit(self.bitboard[r], H8)
                 if self.usetranspo:
-                    hash ^= self.piece_keys[r][F8]
-                    hash ^= self.piece_keys[r][H8]
-                self.occupancies[1] = self.set_bit(self.occupancies[0], F8)
-                self.occupancies[1] = self.pop_bit(self.occupancies[0], H8)
+                    Hash ^= self.piece_keys[r][F8]
+                    Hash ^= self.piece_keys[r][H8]
+                self.occupancies[1] = self.set_bit(self.occupancies[1], F8)
+                self.occupancies[1] = self.pop_bit(self.occupancies[1], H8)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], F8)
                 self.occupancies[2] = self.pop_bit(self.occupancies[2], H8)
                 self.castle_right &= 0b0011
@@ -945,8 +951,8 @@ class Board:
                 self.bitboard[r] = self.set_bit(self.bitboard[r], D8)
                 self.bitboard[r] = self.pop_bit(self.bitboard[r], A8)
                 if self.usetranspo:
-                    hash ^= self.piece_keys[r][D8]
-                    hash ^= self.piece_keys[r][A8]
+                    Hash ^= self.piece_keys[r][D8]
+                    Hash ^= self.piece_keys[r][A8]
                 self.occupancies[1] = self.set_bit(self.occupancies[1], D8)
                 self.occupancies[1] = self.pop_bit(self.occupancies[1], A8)
                 self.occupancies[2] = self.set_bit(self.occupancies[2], D8)
@@ -966,7 +972,7 @@ class Board:
             self.castle_right &= 0b1011
         elif (piece == r and source == A8) or target == A8:
             self.castle_right &= 0b0111
-        if self.usetranspo: hash ^= self.castle_keys[self.castle_right] # on ajoute le nouveau castle right
+        if self.usetranspo: Hash ^= self.castle_keys[self.castle_right] # on ajoute le nouveau castle right
 
         #on vérifie si le roi n'est pas en échec
         if self.square_is_attacked(self.ls1b_index(self.bitboard[K+6*self.side]), 1^self.side):
@@ -977,16 +983,22 @@ class Board:
 
         # on finalise le coup
         self.side ^= 1 # on change de coté
-        if self.usetranspo: hash ^= self.side_key # on change de côté
+        if self.usetranspo: Hash ^= self.side_key # on change de côté
 
         self.add_to_history(move)
 
         if self.usetranspo:
-            self.hash_hist.append(self.position_hash()) # pas le plus oti mais le hashing incrémental marche pas pour l'instant
-        # self.hash_hist.append(hash) # on rajoute la nouvelle position à l'historique des hashs
-        # if hash != self.position_hash():
-        #     print("!!! erreur dans le hashing incrémental !!!")
-        #     print("coup : %s\n"%move.txt())
+        #     my_h = self.position_hash() # on test la bonne réalisation du hashing incrémental
+        #     if my_h != Hash:
+        #         print(move.txt()+" prend "+PIECE_LETTER[prise])
+        #         print(move.capture)
+        #         diff = my_h ^ Hash
+        #         for i in range(12):
+        #             for c in range(64):
+        #                 if self.piece_keys[i][c] == diff:
+        #                     print("diff -> {},{}".format(PIECE_LETTER[i],CASES[c]))
+        #         print()
+            self.hash_hist.append(Hash) # si problème voir le code en commentaire au dessus
             if not self.hash_hist[-1] in self.nulle_3_rep:
                 self.nulle_3_rep[self.hash_hist[-1]] = 1
             else:

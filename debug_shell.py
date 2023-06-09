@@ -71,7 +71,9 @@ while cmd not in ["q","quit","exit"]:
         mv = board.trad_move(coup)
         if mv != -1:
             board.make_move(mv)
+            mv = -1
 
 
     board.print_board(ascii_f)
+    print(board.hash_hist)
     cmd = input("\n>>> ")

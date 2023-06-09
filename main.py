@@ -155,8 +155,15 @@ def execute_cmd():
             print(PIECE_LETTER[i],PIECE_ASCII[i])
             bb = board.bitboard[i]
             board.print_bb(bb,False)
+        print("-------")
+        for i in range(3):
+            print("occupance %s"%i)
+            board.print_bb(board.occupancies[i])
     elif cmd == "cfen":
         pyperclip.copy(board.get_fen())
+    elif cmd == "transpo":
+        board.usetranspo = not board.usetranspo
+        print("Table de transposition : %s"%board.usetranspo)
     elif  cmd[0:4] == "fen ":
         fen = str(cmd[4:])
         print(fen)
@@ -174,12 +181,9 @@ def execute_cmd():
         engine.__init__()
     elif cmd == "quit":
         tk.quit()
-    elif cmd == "getboard":
-        print(E.getboard(B))
-    elif cmd == "nulle_rep":
-        print(E.listfen)
-    elif cmd == "la_proba":
-        show_proba(E)
+    elif cmd == "hash":
+        H1,H2 = board.hash_hist[-1],board.position_hash()
+        print(H1,H2,True)
     elif cmd == "eval" :
         print("evaluation (pour blancs) : " + str(B.evaluer("blanc")/100))
     elif cmd == "black":
