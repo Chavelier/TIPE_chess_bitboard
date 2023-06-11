@@ -1,13 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Mar 28 11:39:03 2022
-
-@author: Corto Cristofoli
-@co-author : Jeunier Hugo
-@secret-author : Lance-Perlick Come
-
-ENGINE
-"""
+""" ENGINE """
 
 from board import *
 
@@ -38,9 +29,13 @@ class Engine:
 
     def bot_move(self,depth,board):
 
-        count = board.count_bit(board.occupancies[2]) #nb de piece restante
-        if count <= 5:
-            pass # mettre ici truc des finales
+        coups = self.ouverture(board)
+        if coups != []:
+            c = coups[rd.randrange(0,len(coups))]+" "
+            print("Coup d'ouverture : "+c)
+            move = board.trad_move(c)
+            if move != -1:
+                return move
 
         # tri PV variables
         self.is_following_pv = False
@@ -102,6 +97,7 @@ class Engine:
         self.is_following_pv = False
         self.is_score_pv = False
 
+        print("\ncalcul...")
         tic = time.time()
         score = self.alphabeta(-50000,50000,depth,board)
         pv = ""
@@ -114,7 +110,7 @@ class Engine:
         print("Profondeur maximale atteinte : %s"%self.max_depth)
         print("Temps de calcul : %ss"%(time.time()-tic))
 
-        print("taille de la table de transpositions : %s\n\n"%len(self.transposition))
+        print("taille de la table de transpositions : %s\n"%len(self.transposition))
         return self.pv_table[0][0]
 
 
@@ -124,11 +120,15 @@ class Engine:
 
         self.pv_length[self.ply] = self.ply # a voir si on peut pas écrire ça dans bot move
 
-        hash = board.hash_hist[-1]
-        hash_flag = 1 # on initialise à alpha flag
-        transpo_val = self.get_transpo(hash, depth, alpha, beta)
-        if self.ply and transpo_val != None:
-            return transpo_val
+        if board.is_nulle:
+            return 0
+
+        if board.usetranspo:
+            Hash = board.hash_hist[-1]
+            hash_flag = 1 # on initialise à alpha flag
+            transpo_val = self.get_transpo(Hash, depth, alpha, beta)
+            if self.ply and transpo_val != None:
+                return transpo_val
 
         if depth == 0:
             # return board.naive_eval()
@@ -137,7 +137,7 @@ class Engine:
         if self.ply >= MAX_PLY: #pour ne pas aller trop loin dans la recherche
             return board.evaluation(False)
 
-        in_check = board.square_is_attacked(board.ls1b_index(board.bitboard[K+6*board.side]), 1^board.side) # est ce que le roi est en echec
+        in_check = board.is_check(board.side) # est ce que le roi est en echec
         if in_check: # on ne cherche un peu plus loin si il y a echec
             depth += 1
 
@@ -147,15 +147,20 @@ class Engine:
         # élagage par coup nul
         # attention au zugzang ! (on peut par exemple vérifier qu'il reste autre chose que roi pion et cavalier)
         if depth >= 3 and self.ply and not in_check and not board.nulle_3_rep and board.nulle_50_cpt < 50:
+            if board.usetranspo:
+                h = board.hash_hist[-1]
+                h ^= board.side_key
+                if board.en_passant != -1:
+                    h ^= board.enpassant_keys[board.en_passant]
+                board.hash_hist.append(h)
+                if h in board.nulle_3_rep:
+                    board.nulle_3_rep[h] += 1
+                else:
+                    board.nulle_3_rep[h] = 1
             board.side ^= 1 # on change le côté qui joue (on donne littéralement un coup en plus)
             board.en_passant = -1 # on le réinitialise pour éviter des coups etranges
             board.add_to_history() # on ajoute cette étrange position à l'historique afin de pouvoir appliquer l'algorithme dessus
-            h = board.position_hash()
-            board.hash_hist.append(h) # on recrer depuis le début la postion en hashing
-            if h in board.nulle_3_rep:
-                board.nulle_3_rep[h] += 1
-            else:
-                board.nulle_3_rep[h] = 1
+
             score = -self.alphabeta(-beta, -beta+1, depth-3, board) # on regarde simplement si il existe un "bon coup" pour l'autre cote a une profondeur réduite
             board.undo_move(True)
             if score >= beta: # il n'en existe pas
@@ -164,7 +169,7 @@ class Engine:
         move_list = board.move_generation(board.side)
         if self.is_following_pv:
             self.enable_pv_scoring(move_list)
-        move_list = self.tri_move(move_list,board) # on tri les coups avec la méthode MVV LVA
+        move_list = self.tri_move(move_list,board) # on tri les coups avec la méthode MVV LVA, killer moves,...
         # rd.shuffle(move_list) ### l'ordre a une importance
 
         moves_searched = 0 # nombre de coups analysés
@@ -173,13 +178,13 @@ class Engine:
                 continue # on le passe donc
             is_legal_move = True # il existe un coup legal
 
-            self.ply += 1
+            self.ply += 1 # on est alors à une profondeur +1 dans l'arbre
 
 
             #### DETERMINATION DU SCORE ####
-            if moves_searched == 0: # on fait une recherche normale
+            if moves_searched == 0: # on fait une recherche normale (souvent le premier coup est celui de la variation principale donc PVS aussi)
                 score = -self.alphabeta(-beta,-alpha,depth-1,board)
-                # self.transposition[hash] = (depth,score)
+                # self.transposition[Hash] = (depth,score)
             else: # Late Move Reduction (LMR)
                 if moves_searched >= FULL_DEPTH_MOVES and depth >= REDUCTION_LIMIT and not in_check and not mv.capture and mv.promotion == NO_PIECE: # condition pour considerer la LMR
                     score = -self.alphabeta(-alpha-1, -alpha, depth-2, board)
@@ -189,7 +194,7 @@ class Engine:
                     score = -self.alphabeta(-alpha-1,-alpha,depth-1,board) # on recherche en supposant que tous les coups restants sont moins bons
                     if score > alpha and score < beta: # on s'est trompé il existe, un meilleur coup, on a perdu du temps mais globalement c'est plus efficace
                         score = -self.alphabeta(-beta,-alpha,depth-1,board)
-                        # self.transposition[hash] = (depth,score)
+                        # self.transposition[Hash] = (depth,score)
 
             #### FIN DETERMINATION DU SCORE ####
 
@@ -199,7 +204,8 @@ class Engine:
             moves_searched += 1
 
             if score >= beta: # fail high-> on coupe cette partie
-                self.transposition[hash] = (depth,beta,2) # on enregistre la position avec le flag beta
+                if board.usetranspo:
+                    self.transposition[Hash] = (depth,beta,2) # on enregistre la position avec le flag beta
 
                 if not mv.capture: # on n'enregistre seulement les coups discrets
                     self.killer_moves[1][self.ply] = self.killer_moves[0][self.ply] # on garde en mémoire l'ancien killer move
@@ -227,7 +233,8 @@ class Engine:
             else:
                 return 0 # sinon c'est pat
 
-        self.transposition[hash] = (depth,alpha,hash_flag)
+        if board.usetranspo:
+            self.transposition[Hash] = (depth,alpha,hash_flag)
 
         return alpha
 
@@ -353,3 +360,25 @@ class Engine:
                 if val[2] == 2 and val[1] >= beta: # beta flag
                     return beta
         return None
+
+
+    ###################################################################################################
+    ########## GESTION OUVERTURE ######################################################################
+    ###################################################################################################
+
+    def ouverture(self,board):
+        """renvoi la liste des coups jouables depuis la position selon l'ouverture"""
+        ligne_partielle = ""
+        suite_coups = ""
+        all_coups = [] #liste de tous les coups possibles
+        nb_coup = len(board.move_history)
+        with open("book.txt",'rt') as ouvertures:
+            for mv in board.move_history:
+                suite_coups += mv.txt(False)
+            for ligne in ouvertures:
+                ligne_partielle = ""+ligne[0 : 5*nb_coup]
+                if suite_coups == ligne_partielle:
+                    all_coups += [ligne[5*nb_coup : 5*nb_coup + 4]]
+                else :
+                    ligne_partielle = ""
+        return all_coups

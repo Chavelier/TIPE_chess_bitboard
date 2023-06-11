@@ -26,7 +26,7 @@ cmd = ""
 
 while cmd not in ["q","quit","exit"]:
     clear()
-    print("Bienvenue dans le moteur d'echec de Corto et Hugo ! \n Tapez help pour les commandes... \n\n\n")
+    print("Bienvenue dans le moteur d'echec de Corto ! \n Tapez help pour les commandes... \n\n\n")
     if cmd == "help":
         print("redemarer une nouvelle partie -> restart")
         print("jouer un coup -> [depart][arrivee][promotion] (ex : e2e4 ou c2c1q)")
@@ -38,7 +38,7 @@ while cmd not in ["q","quit","exit"]:
         print("copier le fen -> cfen")
         print("tester les performances à la profondeur x -> perf [x]")
     elif cmd == "restart":
-        board.init()
+        board.__init__()
     elif cmd == "debug":
         board.add_to_history()
     elif cmd == "ascii":
@@ -71,7 +71,9 @@ while cmd not in ["q","quit","exit"]:
         mv = board.trad_move(coup)
         if mv != -1:
             board.make_move(mv)
+            mv = -1
 
 
     board.print_board(ascii_f)
+    print(board.hash_hist)
     cmd = input("\n>>> ")
