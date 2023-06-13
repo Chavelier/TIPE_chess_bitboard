@@ -1068,6 +1068,7 @@ class Board:
 
 
         for piece in range(12):
+
             bb = self.bitboard[piece]
             while bb:
                 case = self.ls1b_index(bb)
@@ -1084,22 +1085,30 @@ class Board:
                     foun += 1
                 elif piece == R:
                     if not white_pawn_struct[case % 8]: # si il n'y a pas de pion blanc sur la colonne
-                        val += 30
+                        val += 35
                         if not black_pawn_struct[case % 8]:
-                            val += 20
+                            val += 30
                 elif piece == r:
                     if not black_pawn_struct[case % 8]: # si il n'y a pas de pion blanc sur la colonne
-                        val -= 30
+                        val -= 35
                         if not white_pawn_struct[case % 8]:
-                            val -= 20
+                            val -= 30
                 elif piece == K:
                     roib_pos = case
                     if not white_pawn_struct[case % 8]: # roi sur colonne ouverte
                         val -= 150
+                    if FILE[case%8] & self.bitboard[q]: # dame en face du roi
+                        val -= 50
+                    if FILE[case%8] & self.bitboard[r]: # tour en face du roi
+                        val -= 40
                 elif piece == k:
                     roin_pos = case
                     if not black_pawn_struct[case % 8]: # roi sur colonne ouverte
                         val += 150
+                    if FILE[case%8] & self.bitboard[Q]: # dame en face du roi
+                        val += 50
+                    if FILE[case%8] & self.bitboard[R]: # tour en face du roi
+                        val += 40
                 if not piece in [K,k,P,p]:
                     pieces_restantes += 1 # on compte les pieces majeures et mineures
 
@@ -1128,9 +1137,9 @@ class Board:
             val -= 40
 
         # finale
-        if pieces_restantes <= 6: # il ne reste plus beaucoup de pieces sur le terrain on pars donc en finale
-            val += 4-self.dist_bord(roin_pos) * 40 # plus l'autre roi est proche du bord plus il sera facile à mater
-            val -= 4-self.dist_bord(roib_pos) * 40
+        if pieces_restantes <= 6: # il ne reste plus beaucoup de pieces sur le terrain on part donc en finale
+            val += (4-self.dist_bord(roin_pos)) * 40 # plus l'autre roi est proche du bord plus il sera facile à mater
+            val -= (4-self.dist_bord(roib_pos)) * 40
 
 
             val += (7-self.dist(roib_pos, roin_pos)) * (val//5) # on cherche a s'approcher pour mater
