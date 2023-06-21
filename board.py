@@ -95,7 +95,7 @@ class Board:
             self.enpassant_keys = [0 for _ in range(64)] # on en aurait besoin que de 8 théoriquement (1 par colonne combinée avec le côté qui joue)
             self.castle_keys = [0 for _ in range(16)]
             self.side_key = 0
-            self.init_random_keys()
+            self.init_random_keys(64)
             self.hash_hist = [self.position_hash()] # on initialise avec la position 1
 
             self.nulle_3_rep[self.hash_hist[-1]] = 1 # on rajoute la position de départ
@@ -1052,6 +1052,8 @@ class Board:
         foub = 0
         foun = 0
         pieces_restantes = 0
+        rookb_case = [] # sauvegarde pour voir si des tours sont liées ou non
+        rookn_case = []
 
         white_pawn_struct = []
         black_pawn_struct = []
@@ -1088,27 +1090,55 @@ class Board:
                         val += 35
                         if not black_pawn_struct[case % 8]:
                             val += 30
+
+                    # tours liées
+                    if rookb_case != []:
+                        Max,Min = max(rookb_case[-1],case),min(rookb_case[-1],case)
+                        if Max//8 == Min//8: # même ligne
+                            entre = ((2**(Max-Min-1)-1)<<(Min+1)) & self.occupancies[0] # pieces présentes entre les 2 tours
+                            # self.print_bb(entre)
+                            if entre == 0: # aucune pièces blanches entre les 2 tours : elles sont liées
+                                val += 50
+                            elif (entre^self.bitboard[Q]) == 0: # juste la dame entre les 2 tours, pas mal
+                                val += 20
+                    rookb_case.append(case)
+                    # tours liées
+
                 elif piece == r:
                     if not black_pawn_struct[case % 8]: # si il n'y a pas de pion blanc sur la colonne
                         val -= 35
                         if not white_pawn_struct[case % 8]:
                             val -= 30
+
+                    # tours liées
+                    if rookn_case != []:
+                        Max,Min = max(rookn_case[-1],case),min(rookn_case[-1],case)
+                        if Max//8 == Min//8: # même ligne
+                            entre = ((2**(Max-Min-1)-1)<<(Min+1)) & self.occupancies[1] # pieces présentes entre les 2 tours
+                            # self.print_bb(entre)
+                            if entre == 0: # aucune pièces noires entre les 2 tours : elles sont liées
+                                val -= 50
+                            elif (entre^self.bitboard[q]) == 0: # juste la dame entre les 2 tours, pas mal
+                                val -= 20
+                    rookn_case.append(case)
+                    # tours liées
+
                 elif piece == K:
                     roib_pos = case
                     if not white_pawn_struct[case % 8]: # roi sur colonne ouverte
-                        val -= 150
+                        val -= 80
                     if FILE[case%8] & self.bitboard[q]: # dame en face du roi
-                        val -= 50
+                        val -= 20
                     if FILE[case%8] & self.bitboard[r]: # tour en face du roi
-                        val -= 40
+                        val -= 15
                 elif piece == k:
                     roin_pos = case
                     if not black_pawn_struct[case % 8]: # roi sur colonne ouverte
-                        val += 150
+                        val += 80
                     if FILE[case%8] & self.bitboard[Q]: # dame en face du roi
-                        val += 50
+                        val += 20
                     if FILE[case%8] & self.bitboard[R]: # tour en face du roi
-                        val += 40
+                        val += 15
                 if not piece in [K,k,P,p]:
                     pieces_restantes += 1 # on compte les pieces majeures et mineures
 
@@ -1132,9 +1162,9 @@ class Board:
 
 
         if foub >= 2:
-            val += 40
+            val += 30
         if foun >= 2:
-            val -= 40
+            val -= 30
 
         # finale
         if pieces_restantes <= 6: # il ne reste plus beaucoup de pieces sur le terrain on part donc en finale
@@ -1404,29 +1434,30 @@ class Board:
 
     """ !!! ATTENTION UNDO_MOVE MODIFIE HASH_HIST MAIS PAS ADD_TO_HISTORY (c'est make_move qui le fait) """
 
-    def init_random_keys(self):
+    def init_random_keys(self,size=64):
         """ génère les clés pour la table de transposition """
-        cle_pot = cle_pot = rd.randint(0,ALL)
+        max_nb = ALL>>(64-size) # si size = x -> cles de x bits, 1 <= x <= 64
+        cle_pot = cle_pot = rd.randint(0,max_nb)
         used_keys = []
 
         for piece in range(12):
             for case in range(64):
                 while cle_pot in used_keys:
-                    cle_pot = rd.randint(0,ALL)
+                    cle_pot = rd.randint(0,max_nb)
                 used_keys.append(cle_pot)
                 self.piece_keys[piece][case] = cle_pot
         for case in range(64):
             while cle_pot in used_keys:
-                cle_pot = rd.randint(0,ALL)
+                cle_pot = rd.randint(0,max_nb)
             used_keys.append(cle_pot)
             self.enpassant_keys[case] = cle_pot
         for right in range(16):
             while cle_pot in used_keys:
-                cle_pot = rd.randint(0,ALL)
+                cle_pot = rd.randint(0,max_nb)
             used_keys.append(cle_pot)
             self.castle_keys[right] = cle_pot
         while cle_pot in used_keys:
-            cle_pot = rd.randint(0,ALL)
+            cle_pot = rd.randint(0,max_nb)
         used_keys.append(cle_pot)
         self.side_key = cle_pot
 

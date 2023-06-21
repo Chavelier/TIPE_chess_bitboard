@@ -27,10 +27,10 @@ class Engine:
         self.history_moves = [[0 for _ in range(64)] for _ in range(12)] # utile dans le tri des coups
 
 
-    def bot_move(self,depth,board):
+    def bot_move(self,depth,board,iterative=True,opening=True):
 
         coups = self.ouverture(board)
-        if coups != []:
+        if coups != [] and opening:
             c = coups[rd.randrange(0,len(coups))]+" "
             print("Coup d'ouverture : "+c)
             move = board.trad_move(c)
@@ -45,72 +45,72 @@ class Engine:
         self.max_depth = 0
         self.clear_variables()
 
+        if iterative: # recherche en profondeur itérative (aspiration window)
+            temps_tot = 0
+            alpha = -50000
+            beta = 50000
+            print("Profondeur    Noeuds    Profondeur maximale    Temps    Principale variation\n")
+            for current_depth in range(1,depth+1):
+                self.is_following_pv = True
+                # statistiques sur l'ia
+                self.nodes = 0 # compteur des noeuds visités
+                self.max_depth = 0
 
-        # # recherche en profondeur itérative
-        # temps_tot = 0
-        # alpha = -50000
-        # beta = 50000
-        # print("Profondeur    Noeuds    Profondeur maximale    Temps    Principale variation\n")
-        # for current_depth in range(1,depth+1):
-        #     self.is_following_pv = True
-        #     # statistiques sur l'ia
-        #     self.nodes = 0 # compteur des noeuds visités
-        #     self.max_depth = 0
-        #
-        #     tic = time.time()
-        #
-        #     score = self.alphabeta(alpha,beta,current_depth,board)
-        #     if score <= alpha or score >= beta:
-        #         alpha = -50000
-        #         beta = 50000
-        #         print("erreur de fenêtre")
-        #         score = self.alphabeta(alpha,beta,current_depth,board)
-        #         # voir si on a besoin de calculer cette valeur ou si on peut continue
-        #     else:
-        #         alpha = score-ASPIRATION_WINDOW
-        #         beta = score+ASPIRATION_WINDOW
-        #
-        #     tac = time.time()
-        #     temps = tac - tic
-        #     temps_tot += temps
-        #
-        #     pv = ""
-        #     for i in range(self.pv_length[0]):
-        #         move = self.pv_table[0][i]
-        #         pv += move.txt(True)+" "
-        #     ligne = " "*9+str(current_depth)
-        #     ligne += " "*(10-len(str(self.nodes)))+str(self.nodes)
-        #     ligne += " "*(23-len(str(self.max_depth)))+str(self.max_depth)
-        #     ligne +=" "*(8-len(str(round(time.time()-tic,2))))+str(round(temps,2))+"s"
-        #     ligne += " "*4+pv
-        #     print(ligne)
-        # print("\nScore calculé : %s"%score)
-        # print("Temps total : %ss\n\n\n"%round(temps_tot,3))
+                tic = time.time()
 
+                score = self.alphabeta(alpha,beta,current_depth,board)
+                if score <= alpha or score >= beta:
+                    alpha = -50000
+                    beta = 50000
+                    print("[   erreur de fenêtre   ]")
+                    score = self.alphabeta(alpha,beta,current_depth,board)
+                    # voir si on a besoin de calculer cette valeur ou si on peut continue
+                else:
+                    alpha = score-ASPIRATION_WINDOW
+                    beta = score+ASPIRATION_WINDOW
 
-        # efficacité iteration comparaison
-        self.clear_variables()
-        # statistiques sur l'ia
-        self.nodes = 0 # compteur des noeuds visités
-        self.max_depth = 0
-        # tri PV variables
-        self.is_following_pv = False
-        self.is_score_pv = False
+                tac = time.time()
+                temps = tac - tic
+                temps_tot += temps
 
-        print("\ncalcul...")
-        tic = time.time()
-        score = self.alphabeta(-50000,50000,depth,board)
-        pv = ""
-        for i in range(self.pv_length[0]):
-            move = self.pv_table[0][i]
-            pv += move.txt()+" "
-        print("Principale variation : %s"%pv)
-        print("Score calculé : %s"%score)
-        print("Noeuds visités : %s"%self.nodes)
-        print("Profondeur maximale atteinte : %s"%self.max_depth)
-        print("Temps de calcul : %ss"%(time.time()-tic))
+                pv = ""
+                for i in range(self.pv_length[0]):
+                    move = self.pv_table[0][i]
+                    pv += move.txt(True)+" "
+                ligne = " "*9+str(current_depth)
+                ligne += " "*(10-len(str(self.nodes)))+str(self.nodes)
+                ligne += " "*(23-len(str(self.max_depth)))+str(self.max_depth)
+                ligne +=" "*(8-len(str(round(time.time()-tic,2))))+str(round(temps,2))+"s"
+                ligne += " "*4+pv
+                print(ligne)
+            print("\nScore calculé : %s"%score)
+            print("Temps total : %ss\n\n\n"%round(temps_tot,3))
+            print("Noeuds visités : %s"%self.nodes)
+            print("Profondeur maximale atteinte : %s"%self.max_depth)
+            print("taille de la table de transpositions : %s\n"%len(self.transposition))
+        else: # non itération
+            self.clear_variables()
+            # statistiques sur l'ia
+            self.nodes = 0 # compteur des noeuds visités
+            self.max_depth = 0
+            # tri PV variables
+            self.is_following_pv = False
+            self.is_score_pv = False
 
-        print("taille de la table de transpositions : %s\n"%len(self.transposition))
+            print("\ncalcul...")
+            tic = time.time()
+            score = self.alphabeta(-50000,50000,depth,board)
+            pv = ""
+            for i in range(self.pv_length[0]):
+                move = self.pv_table[0][i]
+                pv += move.txt()+" "
+            print("Principale variation : %s"%pv)
+            print("Score calculé : %s"%score)
+            print("Noeuds visités : %s"%self.nodes)
+            print("Profondeur maximale atteinte : %s"%self.max_depth)
+            print("Temps de calcul : %ss"%(time.time()-tic))
+
+            print("taille de la table de transpositions : %s\n"%len(self.transposition))
         return self.pv_table[0][0]
 
 

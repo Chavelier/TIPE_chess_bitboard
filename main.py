@@ -17,6 +17,8 @@ tabl = Label(tk,textvariable=txt)
 
 reverse_mode = False
 black_mode = False
+aspi = True
+opening = True
 search_depth = 4
 board = Board() #création échéquier
 engine = Engine() #creation engine
@@ -128,6 +130,8 @@ def execute_cmd():
     global black_mode
     global move_historique
     global search_depth
+    global aspi
+    global opening
 
     if cmd == "help":
         print("redemarer une nouvelle partie -> new")
@@ -161,9 +165,18 @@ def execute_cmd():
             board.print_bb(board.occupancies[i])
     elif cmd == "cfen":
         pyperclip.copy(board.get_fen())
+    elif cmd == "opening":
+        opening = not opening
+        print("utilisation des ouvertures : %s"%opening)
+    elif cmd == "aspiration":
+        aspi = not aspi
+        print("utilisation de la fenetre d'aspiration : %s"%aspi)
     elif cmd == "transpo":
         board.usetranspo = not board.usetranspo
         print("Table de transposition : %s"%board.usetranspo)
+    elif cmd == "clear":
+        engine.transposition = {} # on vide la table de transpo
+        print("table de transposition vidée")
     elif  cmd[0:4] == "fen ":
         fen = str(cmd[4:])
         print(fen)
@@ -259,6 +272,7 @@ tk.bind_all('<1>', on_click)
 tk.bind_all('<3>',on_click2)
 # tk.bind_all('<KeyPress-Control_L>', bot_play)
 tk.bind_all('<Up>', bot_play)
+tk.bind_all('<Down>', bot_play)
 
 box = Frame(tk)
 cmd_bar = Entry(box)
