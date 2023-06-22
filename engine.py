@@ -184,7 +184,6 @@ class Engine:
             #### DETERMINATION DU SCORE ####
             if moves_searched == 0: # on fait une recherche normale (souvent le premier coup est celui de la variation principale donc PVS aussi)
                 score = -self.alphabeta(-beta,-alpha,depth-1,board)
-                # self.transposition[Hash] = (depth,score)
             else: # Late Move Reduction (LMR)
                 if moves_searched >= FULL_DEPTH_MOVES and depth >= REDUCTION_LIMIT and not in_check and not mv.capture and mv.promotion == NO_PIECE: # condition pour considerer la LMR
                     score = -self.alphabeta(-alpha-1, -alpha, depth-2, board)
@@ -194,7 +193,6 @@ class Engine:
                     score = -self.alphabeta(-alpha-1,-alpha,depth-1,board) # on recherche en supposant que tous les coups restants sont moins bons
                     if score > alpha and score < beta: # on s'est trompé il existe, un meilleur coup, on a perdu du temps mais globalement c'est plus efficace
                         score = -self.alphabeta(-beta,-alpha,depth-1,board)
-                        # self.transposition[Hash] = (depth,score)
 
             #### FIN DETERMINATION DU SCORE ####
 
@@ -345,6 +343,8 @@ class Engine:
             if mv.id == self.pv_table[0][self.ply].id:
                 self.is_score_pv = True
                 self.is_following_pv = True
+
+
 
 
 

@@ -127,16 +127,21 @@ class Board:
         renvoi si le bit de la case demandee du bitboard est occupé"""
         return (bitboard & (1 << case) != 0)
 
+    # @staticmethod
+    # def count_bit(bitboard):  # méthode de Brian Kernighan
+    #     """ U64 -> int
+    #     renvoi le nombre de bit du bitboard """  # TODO: on peut ameliorer la fonction
+    #     bb = bitboard
+    #     count = 0
+    #     while bb:
+    #         count += 1
+    #         bb = bb & (bb-1)  # enleve le bit le moins signifiant
+    #     return count
+
     @staticmethod
-    def count_bit(bitboard):  # verifier efficacite (static inline equivalent)
-        """ U64 -> int
-        renvoi le nombre de bit du bitboard """  # TODO: on peut ameliorer la fonction
-        bb = bitboard
-        count = 0
-        while bb:
-            count += 1
-            bb = bb & (bb-1)  # enleve le bit le moins signifiant
-        return count
+    def count_bit(bitboard): # il s'avère que cette fonction est beaucoup plus efficace que la foction ci-dessus (facteur 2)
+        return bitboard.bit_count()
+
 
     @staticmethod
     def ls1b_index(bitboard):  # verifier efficacite (static inline equivalent)
